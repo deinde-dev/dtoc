@@ -932,6 +932,16 @@ class TestFdtUtil(unittest.TestCase):
         finally:
             tools.outdir = old_outdir
 
+    def test_ensure_compiled_indir(self):
+        """Test compiling with input directories specified"""
+        tmpdir = tempfile.mkdtemp(prefix='test_fdt.')
+        dest = os.path.join(tmpdir, 'try.dts')
+        shutil.copy(find_dtb_file('dtoc_test_inc.dts'), dest)
+
+        dtb = fdt_util.EnsureCompiled(dest, indir=['tools/dtoc/test'])
+        self.assertEqual(dtb, fdt_util.EnsureCompiled(dtb))
+        shutil.rmtree(tmpdir)
+
     def test_get_phandle_name_offset(self):
         val = fdt_util.GetPhandleNameOffset(self.node, 'missing')
         self.assertIsNone(val)
