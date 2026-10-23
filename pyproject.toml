@@ -8,19 +8,34 @@ version = "0.0.7"
 authors = [
   { name="Simon Glass", email="sjg@chromium.org" },
 ]
-dependencies = ["pylibfdt", "u_boot_pylib >= 0.0.6"]
-description = "Devicetree-to-C generator"
+description = "Convert devicetree files into C code, for U-Boot's of-platdata"
 readme = "README.rst"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
+license = "GPL-2.0-or-later"
+license-files = ["LICENSE"]
+keywords = ["u-boot", "devicetree", "dtb", "firmware", "code-generation"]
 classifiers = [
     "Programming Language :: Python :: 3",
-    "License :: OSI Approved :: GNU General Public License v2 or later (GPLv2+)",
-    "Operating System :: OS Independent",
+    "Operating System :: POSIX :: Linux",
+    "Environment :: Console",
+    "Topic :: Software Development :: Code Generators",
+    "Topic :: Software Development :: Embedded Systems",
+    "Intended Audience :: Developers",
+]
+dependencies = [
+    "pylibfdt >= 1.7",
+    "u-boot-pylib >= 0.1.0",
 ]
 
+[project.optional-dependencies]
+# Running the test suite (parallel test execution and coverage)
+test = ["concurrencytest", "coverage"]
+
 [project.urls]
-"Homepage" = "https://docs.u-boot-project.org/en/latest/develop/driver-model/of-plat.html"
-"Bug Tracker" = "https://git.u-boot-project.org/groups/u-boot/-/issues"
+Homepage = "https://github.com/deinde-dev/dtoc"
+Documentation = "https://dtoc.readthedocs.io/"
+Repository = "https://github.com/deinde-dev/dtoc"
+"Bug Tracker" = "https://github.com/deinde-dev/dtoc/issues"
 
 [project.scripts]
 dtoc = "dtoc.main:run_dtoc"
