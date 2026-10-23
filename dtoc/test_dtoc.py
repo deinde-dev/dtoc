@@ -30,6 +30,7 @@ from dtoc.dtb_platdata import get_value
 from dtoc.dtb_platdata import tab_to
 from dtoc.src_scan import conv_name_to_c
 from dtoc.src_scan import get_compat_name
+from dtoc.test_src_scan import NEED_UBOOT_SRC, find_uboot_src
 from u_boot_pylib import terminal
 from u_boot_pylib import test_util
 from u_boot_pylib import tools
@@ -104,13 +105,26 @@ def get_dtb_file(dts_fname, capture_stderr=False):
 def setup():
     global saved_scan
 
+    # Most tests use the drivers in a U-Boot source tree. Without one they are
+    # skipped
+    src = find_uboot_src()
+    if not src:
+        saved_scan = None
+        return
+
     # Disable warnings so that calls to get_normalized_compat_name() will not
     # output things.
-    saved_scan = src_scan.Scanner(None, False)
+    saved_scan = src_scan.Scanner(src, False)
     saved_scan.scan_drivers()
 
 def copy_scan():
-    """Get a copy of saved_scan so that each test can start clean"""
+    """Get a copy of saved_scan so that each test can start clean
+
+    Raises:
+        unittest.SkipTest: if no U-Boot source tree is available
+    """
+    if not saved_scan:
+        raise unittest.SkipTest(NEED_UBOOT_SRC)
     return copy.deepcopy(saved_scan)
 
 
@@ -242,9 +256,11 @@ class TestDtoc(unittest.TestCase):
         dtb_file = get_dtb_file('dtoc_test_empty.dts')
         output = tools.get_output_filename('output')
 
-        # Run this one without saved_scan to complete test coverage
-        dtb_platdata.run_steps(['struct'], dtb_file, False, output, [], None,
-                               False)
+        # Run this one without saved_scan to complete test coverage, scanning
+        # an empty source tree since the file has no nodes
+        with tempfile.TemporaryDirectory() as srcdir:
+            dtb_platdata.run_steps(['struct'], dtb_file, False, output, [],
+                                   None, False, basedir=srcdir)
         with open(output) as infile:
             lines = infile.read().splitlines()
         self.assertEqual(HEADER.splitlines(), lines)

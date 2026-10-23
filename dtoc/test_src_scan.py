@@ -22,6 +22,26 @@ from u_boot_pylib import tools
 
 OUR_PATH = os.path.dirname(os.path.realpath(__file__))
 
+# Message for tests which need a U-Boot source tree
+NEED_UBOOT_SRC = 'Set UBOOT_SRC to a U-Boot tree to run this test'
+
+
+def find_uboot_src():
+    """Find a U-Boot source tree for tests which scan its drivers
+
+    Some tests scan U-Boot's real drivers, e.g. to find sandbox_i2c. Point the
+    UBOOT_SRC environment variable at a U-Boot source tree to run these tests.
+
+    Returns:
+        str: Path to the U-Boot source tree, or None if not available
+    """
+    src = os.environ.get('UBOOT_SRC')
+    if src and os.path.exists(os.path.join(src, 'drivers', 'i2c',
+                                           'sandbox_i2c.c')):
+        return src
+    return None
+
+
 EXPECT_WARN = {'rockchip_rk3288_grf':
                    {'WARNING: the driver rockchip_rk3288_grf was not found in the driver list'}}
 
@@ -51,9 +71,20 @@ class TestSrcScan(unittest.TestCase):
     def tearDownClass(cls):
         tools.finalise_output_dir()
 
+    def require_uboot_src(self):
+        """Skip the test unless a U-Boot source tree is available
+
+        Returns:
+            str: Path to the U-Boot source tree
+        """
+        src = find_uboot_src()
+        if not src:
+            self.skipTest(NEED_UBOOT_SRC)
+        return src
+
     def test_simple(self):
         """Simple test of scanning drivers"""
-        scan = src_scan.Scanner(None, None)
+        scan = src_scan.Scanner(self.require_uboot_src(), None)
         scan.scan_drivers()
         self.assertIn('sandbox_gpio', scan._drivers)
         self.assertIn('sandbox_gpio_alias', scan._driver_aliases)
@@ -78,8 +109,7 @@ class TestSrcScan(unittest.TestCase):
     def test_additional(self):
         """Test with additional drivers to scan"""
         scan = src_scan.Scanner(
-            None, [None, '',
-                   os.path.join(OUR_PATH, 'test', 'dtoc_test_scan_drivers.cxx')])
+            OUR_PATH, [None, '', 'test/dtoc_test_scan_drivers.cxx'])
         scan.scan_drivers()
         self.assertIn('sandbox_gpio_alias2', scan._driver_aliases)
         self.assertEqual('sandbox_gpio',
@@ -96,9 +126,10 @@ class TestSrcScan(unittest.TestCase):
         with open(driver_fn, 'wb+') as fout:
             fout.write(b'\x81')
 
-        scan = src_scan.Scanner(None, [driver_fn])
-        with terminal.capture() as (stdout, _):
-            scan.scan_drivers()
+        with tempfile.TemporaryDirectory() as srcdir:
+            scan = src_scan.Scanner(srcdir, [driver_fn])
+            with terminal.capture() as (stdout, _):
+                scan.scan_drivers()
         self.assertRegex(stdout.getvalue(),
                          r"Skipping file '.*' due to unicode error\s*")
 
@@ -158,7 +189,8 @@ class TestSrcScan(unittest.TestCase):
 
     def test_scan(self):
         """Test scanning of a driver"""
-        fname = os.path.join(OUR_PATH, '..', '..', 'drivers/i2c/tegra_i2c.c')
+        fname = os.path.join(self.require_uboot_src(),
+                             'drivers/i2c/tegra_i2c.c')
         buff = tools.read_file(fname, False)
         scan = src_scan.Scanner(None, None)
         scan._parse_driver(fname, buff)
