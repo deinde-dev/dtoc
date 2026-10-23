@@ -1194,7 +1194,8 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
         drivers_additional (list): List of additional drivers to use during
             scanning
         basedir (str): Base directory of U-Boot source code. Defaults to the
-            grandparent of this file's directory
+            top of the U-Boot tree when run as tools/dtoc/dtoc from one, else
+            the current directory
         scan (src_src.Scanner): Scanner from a previous run. This can help speed
             up tests. Use None for normal operation
 

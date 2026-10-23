@@ -15,12 +15,15 @@ import glob
 import os
 import pathlib
 import struct
+import sys
 import tempfile
 import unittest
+from unittest import mock
 
 from dtoc import dtb_platdata
 from dtoc import fdt
 from dtoc import fdt_util
+from dtoc import main
 from dtoc import src_scan
 from dtoc.dtb_platdata import Ftype
 from dtoc.dtb_platdata import get_value
@@ -217,6 +220,22 @@ class TestDtoc(unittest.TestCase):
         self.assertEqual((['rockchip_rk3399_sdhci_5_1',
                            'arasan_sdhci_5_1', 'third']),
                          get_compat_name(node))
+
+    def test_source_dir(self):
+        """Test giving the U-Boot source directory to scan"""
+        dtb_file = get_dtb_file('dtoc_test_empty.dts')
+        output = tools.get_output_filename('output')
+        with tempfile.TemporaryDirectory() as srcdir:
+            plat = dtb_platdata.run_steps(['struct'], dtb_file, False, output,
+                                          [], None, False, basedir=srcdir)
+        self.assertEqual(srcdir, plat._scan._basedir)
+
+        # Check that the command-line option is passed through
+        with mock.patch.object(dtb_platdata, 'run_steps') as run_steps:
+            with mock.patch.object(sys, 'argv',
+                                   ['dtoc', '-s', '/my/tree', 'struct']):
+                main.run_dtoc()
+        self.assertEqual('/my/tree', run_steps.call_args.kwargs['basedir'])
 
     def test_empty_file(self):
         """Test output from a device tree file with no nodes"""

@@ -10,6 +10,7 @@ This includes unit tests for scanning of the source code
 import copy
 import os
 import shutil
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -59,6 +60,20 @@ class TestSrcScan(unittest.TestCase):
         self.assertEqual('sandbox_gpio',
                          scan._driver_aliases['sandbox_gpio_alias'])
         self.assertNotIn('sandbox_gpio_alias2', scan._driver_aliases)
+
+    def test_default_basedir(self):
+        """Test the source directory used when none is given"""
+        for argv0, expect in (
+                ('/path/to/u-boot/tools/dtoc/dtoc', '/path/to/u-boot/'),
+                ('./tools/dtoc/dtoc', './'),
+                ('tools/dtoc/dtoc', './'),
+                ('/usr/bin/dtoc', './'),
+                ('dtoc/main.py', './')):
+            with mock.patch.object(sys, 'argv', [argv0]):
+                self.assertEqual(expect, src_scan.Scanner(None, None)._basedir)
+
+        # A directory given explicitly is used as is
+        self.assertEqual('/my/tree', src_scan.Scanner('/my/tree', None)._basedir)
 
     def test_additional(self):
         """Test with additional drivers to scan"""

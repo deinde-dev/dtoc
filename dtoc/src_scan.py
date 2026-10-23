@@ -176,12 +176,29 @@ class Struct:
         return ("Struct(name='%s', fname='%s')" % (self.name, self.fname))
 
 
+def default_basedir():
+    """Work out the U-Boot source directory when none is given
+
+    When run as tools/dtoc/dtoc from a U-Boot tree, this is the top of that
+    tree. Otherwise, as with an installed dtoc, it is the current directory.
+
+    Returns:
+        str: Path to the U-Boot source directory
+    """
+    script = 'tools/dtoc/dtoc'
+    if sys.argv[0].endswith(script):
+        basedir = sys.argv[0][:-len(script)]
+        if basedir:
+            return basedir
+    return './'
+
+
 class Scanner:
     """Scanning of the U-Boot source tree
 
     Properties:
-        _basedir (str): Base directory of U-Boot source code. Defaults to the
-            grandparent of this file's directory
+        _basedir (str): Base directory of U-Boot source code. See
+            default_basedir() for the default
         _drivers: Dict of valid driver names found in drivers/
             key: Driver name
             value: Driver for that driver
@@ -213,9 +230,7 @@ class Scanner:
         """Set up a new Scanner
         """
         if not basedir:
-            basedir = sys.argv[0].replace('tools/dtoc/dtoc', '')
-            if basedir == '':
-                basedir = './'
+            basedir = default_basedir()
         self._basedir = basedir
         self._drivers = {}
         self._driver_aliases = {}

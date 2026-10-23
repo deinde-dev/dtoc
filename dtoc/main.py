@@ -100,6 +100,10 @@ def run_dtoc():
         help='set phase of U-Boot this invocation is for (spl/tpl)')
     parser.add_argument('-P', '--processes', type=int,
                       help='set number of processes to use for running tests')
+    parser.add_argument(
+        '-s', '--source-dir', type=str,
+        help='U-Boot source directory to scan for drivers (defaults to the '
+             'current directory)')
     if HAVE_TESTS:
         parser.add_argument('-t', '--test', action='store_true', dest='test',
                             default=False, help='run tests')
@@ -121,7 +125,8 @@ def run_dtoc():
         dtb_platdata.run_steps(args.files, args.dtb_file, args.include_disabled,
                                args.output,
                                [args.c_output_dir, args.h_output_dir],
-                               args.phase, instantiate=args.instantiate)
+                               args.phase, instantiate=args.instantiate,
+                               basedir=args.source_dir)
 
 
 if __name__ == '__main__':
