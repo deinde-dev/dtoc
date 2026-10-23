@@ -12,3 +12,4 @@ The project is hosted at https://github.com/deinde-dev/dtoc
    :maxdepth: 2
 
    dtoc
+   changelog
