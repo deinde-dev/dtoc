@@ -1,0 +1,138 @@
+name: Tests
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+
+permissions:
+  contents: read
+
+env:
+  # U-Boot source for the tests which scan its drivers (see UBOOT_SRC in
+  # dtoc/test_src_scan.py). The tests check the code generated for some of
+  # its drivers, so a newer tree may need the expected output updating
+  UBOOT_REPO: https://concept.deinde.dev/u-boot/u-boot.git
+  UBOOT_REF: 35ce10218dcd32a3c444ee2607585be313423c90
+
+jobs:
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.10', '3.11', '3.12']
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v7
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+
+      # The tests compile devicetree sources, which needs the C preprocessor
+      # and dtc
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential device-tree-compiler
+
+      - name: Fetch the U-Boot source
+        run: |
+          git init -q u-boot
+          git -C u-boot fetch -q --depth 1 "$UBOOT_REPO" "$UBOOT_REF"
+          git -C u-boot checkout -q FETCH_HEAD
+          echo "UBOOT_SRC=$PWD/u-boot" >> "$GITHUB_ENV"
+
+      # The coverage check runs 'coverage' only from within a virtualenv,
+      # falling back to the distro's 'python3-coverage' otherwise
+      - name: Create a virtualenv
+        run: |
+          python -m venv .venv
+          echo "$PWD/.venv/bin" >> "$GITHUB_PATH"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install -e .[test]
+
+      - name: Run the test suite
+        run: dtoc -t
+
+      # Coverage needs the tests to run single-threaded, so only check it
+      # once
+      - name: Check test coverage
+        if: matrix.python-version == '3.12'
+        run: dtoc -T
+
+  test-latest:
+    # Run against the newest dependency versions (no requirements.txt
+    # pins), which is what a fresh 'pip install dtoc' gets. This catches
+    # breakage from upstream releases before users hit it, rather than only
+    # testing the pinned versions above.
+    name: Test (latest deps, Python 3.12)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential device-tree-compiler
+
+      - name: Fetch the U-Boot source
+        run: |
+          git init -q u-boot
+          git -C u-boot fetch -q --depth 1 "$UBOOT_REPO" "$UBOOT_REF"
+          git -C u-boot checkout -q FETCH_HEAD
+          echo "UBOOT_SRC=$PWD/u-boot" >> "$GITHUB_ENV"
+
+      - name: Install with the latest dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e .[test]
+
+      - name: Run the test suite
+        run: dtoc -t
+
+  package:
+    name: Build and check the package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+
+      - name: Build sdist and wheel
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+
+      - name: Check the distribution with twine
+        run: twine check --strict dist/*
+
+      - name: Install the wheel into a clean environment and smoke-test it
+        run: |
+          python -m venv /tmp/smoke
+          /tmp/smoke/bin/pip install --upgrade pip
+          /tmp/smoke/bin/pip install dist/*.whl
+          /tmp/smoke/bin/dtoc --help > /dev/null
+          echo 'entry point works'
+
+      - name: Upload the built distribution
+        uses: actions/upload-artifact@v7
+        with:
+          name: dist
+          path: dist/*

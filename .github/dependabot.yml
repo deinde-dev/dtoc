@@ -1,0 +1,16 @@
+version: 2
+updates:
+  # Keep the GitHub Actions used by the workflows up to date
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+
+  # Keep the Python dependencies up to date
+  - package-ecosystem: pip
+    directory: "/"
+    schedule:
+      interval: weekly
+    # Update only the pins in requirements.txt; leave the minimum versions
+    # in pyproject.toml alone unless a new release falls outside them
+    versioning-strategy: increase-if-necessary
