@@ -18,7 +18,7 @@ Dtoc produces several output files - see OUTPUT_FILES in dtb_platdata.py
 This tool is used in U-Boot to provide device tree data to SPL without
 increasing the code size of SPL. This supports the CONFIG_SPL_OF_PLATDATA
 options. For more information about the use of this options and tool please
-see doc/driver-model/of-plat.rst
+see U-Boot's doc/develop/driver-model/of-plat.rst
 """
 
 from argparse import ArgumentParser
@@ -76,7 +76,8 @@ def RunTestCoverage(build_dir):
 
 
 def run_dtoc():
-    epilog = 'Generate C code from devicetree files. See of-plat.rst for details'
+    epilog = ('Generate C code from devicetree files. See '
+              'https://dtoc.readthedocs.io/ for details')
 
     parser = ArgumentParser(epilog=epilog)
     parser.add_argument('-B', '--build-dir', type=str, default='b',

@@ -10,7 +10,7 @@
 This scans the source tree to find out things about all instances of
 U_BOOT_DRIVER(), UCLASS_DRIVER and all struct declarations in header files.
 
-See doc/driver-model/of-plat.rst for more informaiton
+See U-Boot's doc/develop/driver-model/of-plat.rst for more information
 """
 
 import collections

@@ -10,7 +10,7 @@
 This supports converting device tree data to C structures definitions and
 static data.
 
-See doc/driver-model/of-plat.rst for more informaiton
+See U-Boot's doc/develop/driver-model/of-plat.rst for more information
 """
 
 import collections
@@ -596,7 +596,7 @@ class DtbPlatdata():
 
         This writes out the body of a header file consisting of structure
         definitions for node in self._valid_nodes. See the documentation in
-        doc/driver-model/of-plat.rst for more information.
+        U-Boot's doc/develop/driver-model/of-plat.rst for more information.
         """
         structs = self._struct_data
         self.out('#include <stdbool.h>\n')
@@ -1079,8 +1079,8 @@ class DtbPlatdata():
         U_BOOT_DRVINFO() declarations for each valid node. Where a node has
         multiple compatible strings, a #define is used to make them equivalent.
 
-        See the documentation in doc/driver-model/of-plat.rst for more
-        information.
+        See the documentation in U-Boot's doc/develop/driver-model/of-plat.rst
+        for more information.
         """
         self.out('/* Allow use of U_BOOT_DRVINFO() in this file */\n')
         self.out('#define DT_PLAT_C\n')
@@ -1114,8 +1114,8 @@ class DtbPlatdata():
         This writes out DM_DEVICE_INST() records for each device in the
         build.
 
-        See the documentation in doc/driver-model/of-plat.rst for more
-        information.
+        See the documentation in U-Boot's doc/develop/driver-model/of-plat.rst
+        for more information.
         """
         self.out('#include <dm.h>\n')
         self.out('#include <dt-structs.h>\n')
