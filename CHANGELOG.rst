@@ -8,6 +8,9 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.1.0 - 2026-10-23
+------------------
+
 Added
 ~~~~~
 - A ``-s/--source-dir`` option gives the U-Boot source tree to scan for
