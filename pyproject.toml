@@ -24,3 +24,11 @@ classifiers = [
 
 [project.scripts]
 dtoc = "dtoc.main:run_dtoc"
+
+[tool.setuptools.packages.find]
+# dtoc.test holds the test data, found as a namespace package
+include = ["dtoc*"]
+
+[tool.setuptools.package-data]
+dtoc = ["*.rst"]
+"dtoc.test" = ["*"]

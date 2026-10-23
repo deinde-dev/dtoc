@@ -63,7 +63,8 @@ class TestSrcScan(unittest.TestCase):
     def test_additional(self):
         """Test with additional drivers to scan"""
         scan = src_scan.Scanner(
-            None, [None, '', 'tools/dtoc/test/dtoc_test_scan_drivers.cxx'])
+            None, [None, '',
+                   os.path.join(OUR_PATH, 'test', 'dtoc_test_scan_drivers.cxx')])
         scan.scan_drivers()
         self.assertIn('sandbox_gpio_alias2', scan._driver_aliases)
         self.assertEqual('sandbox_gpio',
@@ -349,8 +350,9 @@ struct some_struct1 {
 };
 '''
         scan = src_scan.Scanner(None, None)
-        scan._basedir = os.path.join(OUR_PATH, '..', '..')
-        scan._parse_structs('arch/arm/include/asm/file.h', buff)
+        scan._basedir = OUR_PATH
+        scan._parse_structs(
+            os.path.join(OUR_PATH, 'arch/arm/include/asm/file.h'), buff)
         self.assertIn('some_struct1', scan._structs)
         struc = scan._structs['some_struct1']
         self.assertEqual('some_struct1', struc.name)
@@ -363,7 +365,7 @@ struct another_struct {
 	int max_transaction_bytes;
 };
 '''
-        scan._parse_structs('include/file2.h', buff)
+        scan._parse_structs(os.path.join(OUR_PATH, 'include/file2.h'), buff)
         self.assertIn('another_struct', scan._structs)
         struc = scan._structs['another_struct']
         self.assertEqual('another_struct', struc.name)

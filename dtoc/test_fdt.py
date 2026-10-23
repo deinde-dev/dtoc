@@ -14,15 +14,13 @@ import sys
 import tempfile
 import unittest
 
-# Bring in the patman libraries
+# Allow running directly from a checkout ('python3 dtoc/test_fdt.py'), so that
+# 'from dtoc import ...' resolves
 our_path = os.path.dirname(os.path.realpath(__file__))
 sys.path.insert(1, os.path.join(our_path, '..'))
 
-# Bring in the libfdt module
-sys.path.insert(2, 'scripts/dtc/pylibfdt')
-sys.path.insert(2, os.path.join(our_path, '../../scripts/dtc/pylibfdt'))
-sys.path.insert(2, os.path.join(our_path,
-                '../../build-sandbox_spl/scripts/dtc/pylibfdt'))
+# Directory holding the test devicetree files
+TEST_DATA_DIR = os.path.join(our_path, 'test')
 
 #pylint: disable=wrong-import-position
 from dtoc import fdt
@@ -68,7 +66,7 @@ def find_dtb_file(dts_fname):
     Returns:
         str: Path to the test filename
     """
-    return os.path.join('tools/dtoc/test', dts_fname)
+    return os.path.join(TEST_DATA_DIR, dts_fname)
 
 
 class TestFdt(unittest.TestCase):
@@ -938,7 +936,7 @@ class TestFdtUtil(unittest.TestCase):
         dest = os.path.join(tmpdir, 'try.dts')
         shutil.copy(find_dtb_file('dtoc_test_inc.dts'), dest)
 
-        dtb = fdt_util.EnsureCompiled(dest, indir=['tools/dtoc/test'])
+        dtb = fdt_util.EnsureCompiled(dest, indir=[TEST_DATA_DIR])
         self.assertEqual(dtb, fdt_util.EnsureCompiled(dtb))
         shutil.rmtree(tmpdir)
 
@@ -960,9 +958,8 @@ def run_test_coverage(build_dir):
     Args:
         build_dir (str): Directory containing the build output
     """
-    test_util.run_test_coverage('tools/dtoc/test_fdt.py', None,
-            ['tools/patman/*.py', 'tools/u_boot_pylib/*', '*test_fdt.py'],
-            build_dir)
+    test_util.run_test_coverage(os.path.join(our_path, 'test_fdt.py'), None,
+                                ['*test_fdt.py'], build_dir)
 
 
 def run_tests(names, processes):

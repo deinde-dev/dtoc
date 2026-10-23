@@ -26,14 +26,11 @@ import os
 import pathlib
 import sys
 
-# Bring in the patman libraries
+# Allow running directly from a checkout ('python3 dtoc/main.py'), so that
+# 'from dtoc import ...' resolves
+# pylint: disable=C0413
 our_path = os.path.dirname(os.path.realpath(__file__))
-sys.path.append(os.path.join(our_path, '..'))
-
-# Bring in the libfdt module
-sys.path.insert(0, 'scripts/dtc/pylibfdt')
-sys.path.insert(0, os.path.join(our_path,
-                '../../build-sandbox_spl/scripts/dtc/pylibfdt'))
+sys.path.insert(1, os.path.join(our_path, '..'))
 
 from dtoc import dtb_platdata
 from u_boot_pylib import test_util
@@ -49,8 +46,9 @@ def run_tests(processes, args):
         args: List of positional args provided to dtoc. This can hold a test
             name to execute (as in 'dtoc -t test_empty_file', for example)
     """
-    from dtoc import test_src_scan
     from dtoc import test_dtoc
+    from dtoc import test_fdt
+    from dtoc import test_src_scan
 
     sys.argv = [sys.argv[0]]
     test_name = args.files and args.files[0] or None
@@ -61,7 +59,10 @@ def run_tests(processes, args):
         toolname='dtoc', debug=True, verbosity=1, no_capture=False,
         test_preserve_dirs=False, processes=processes, test_name=test_name,
         toolpath=[],
-        class_and_module_list=[test_dtoc.TestDtoc,test_src_scan.TestSrcScan])
+        class_and_module_list=[
+            test_dtoc.TestDtoc, test_dtoc.TestAtomicOutput,
+            test_src_scan.TestSrcScan, test_fdt.TestFdt, test_fdt.TestNode,
+            test_fdt.TestProp, test_fdt.TestFdtUtil])
 
     return (0 if result.wasSuccessful() else 1)
 
@@ -69,9 +70,9 @@ def run_tests(processes, args):
 def RunTestCoverage(build_dir):
     """Run the tests and check that we get 100% coverage"""
     sys.argv = [sys.argv[0]]
-    test_util.run_test_coverage('tools/dtoc/dtoc', '/main.py',
-            ['tools/patman/*.py', 'tools/u_boot_pylib/*','*/fdt*', '*test*'],
-            build_dir)
+    test_util.run_test_coverage(
+        os.path.join(our_path, 'main.py'), None,
+        ['*/dtoc/main.py', '*/dtoc/*test*.py'], build_dir)
 
 
 def run_dtoc():
