@@ -1,4 +1,4 @@
 concurrencytest==0.1.11
-coverage==7.17.0
+coverage==7.16.2
 pylibfdt==1.7.2.post2
 u-boot-pylib==0.1.0
