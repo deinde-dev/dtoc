@@ -8,6 +8,16 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.1.1 - 2026-11-03
+------------------
+
+Fixed
+~~~~~
+- ``Node.copy_subnodes_from_phandles()`` copies the phandles of the
+  subnodes it copies, so that binman templates can contain nodes which are
+  referenced by phandle. Previously binman failed with ``Cannot find node
+  for phandle``.
+
 0.1.0 - 2026-10-23
 ------------------
 
