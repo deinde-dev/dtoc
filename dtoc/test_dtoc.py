@@ -285,7 +285,7 @@ U_BOOT_DRIVER(test_dev_prop) = {
 U_BOOT_DRVINFO(dev_prop_a) = {
 \t.name\t\t= "test_dev_prop",
 \t.plat\t\t= &dtv_dev_prop_a,
-\t.plat_size\t= DRIVER_INFO_DTPLAT,
+\t.parent_idx\t= -1,
 ''', data)
         self.assertIn('''static const struct dtd_drv_test_dev_prop dtv_dev_prop_b = {
 \t.reg\t\t\t= {0x2000, 0x10},

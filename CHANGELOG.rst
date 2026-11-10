@@ -8,6 +8,14 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Changed
+~~~~~~~
+- The ``U_BOOT_DRVINFO()`` for a device whose driver uses the
+  ``dev_prop_...()`` helpers no longer sets ``plat_size`` to
+  ``DRIVER_INFO_DTPLAT``. U-Boot now records the generated data for every
+  device bound from a ``driver_info``, so no marker is needed. This needs
+  a U-Boot which has dropped the marker.
+
 0.2.0 - 2026-11-10
 ------------------
 

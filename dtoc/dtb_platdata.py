@@ -727,7 +727,6 @@ class DtbPlatdata():
         if node.dev_props:
             self.buf('\t.name\t\t= "%s",\n' % node.driver.name)
             self.buf('\t.plat\t\t= &%s%s,\n' % (VAL_PREFIX, node.var_name))
-            self.buf('\t.plat_size\t= DRIVER_INFO_DTPLAT,\n')
         else:
             self.buf('\t.name\t\t= "%s",\n' % node.struct_name)
             self.buf('\t.plat\t\t= &%s%s,\n' % (VAL_PREFIX, node.var_name))
