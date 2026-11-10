@@ -125,7 +125,13 @@ def copy_scan():
     """
     if not saved_scan:
         raise unittest.SkipTest(NEED_UBOOT_SRC)
-    return copy.deepcopy(saved_scan)
+    scan = copy.deepcopy(saved_scan)
+
+    # Each driver which uses the dev_prop helpers gets a struct, so leave out
+    # the U-Boot tree's ones, which would make the output depend on the tree
+    for driver in scan._drivers.values():
+        driver.dev_props = {}
+    return scan
 
 
 class TestDtoc(unittest.TestCase):
@@ -185,6 +191,141 @@ class TestDtoc(unittest.TestCase):
         return dtb_platdata.run_steps(
             args, dtb_file, False, output, [], None, instantiate,
             warning_disabled=True, scan=copy_scan())
+
+    DEV_PROP_DRIVER = """
+static int test_dev_prop_of_to_plat(struct udevice *dev)
+{
+	DTPLAT(test_dev_prop, dt, dev);
+
+	plat->base = dev_prop_addr(dev, dt);
+	plat->freq = dev_prop_u32_default(dev, dt, max_frequency,
+					"max-frequency", 1000);
+	plat->fixed = dev_prop_bool(dev, dt, non_removable, "non-removable");
+	ret = dev_prop_clk(dev, dt, clocks, "clocks", 0, &plat->clk);
+
+	/* No node has these */
+	plat->val = dev_prop_u32_default(dev, dt, absent_u32, "absent-u32", 1);
+	plat->flag = dev_prop_bool(dev, dt, absent_bool, "absent-bool");
+	ret = dev_prop_clk(dev, dt, absent_clocks, "absent-clocks", 0, &clk);
+	ret = dev_prop_u32_array(dev, dt, absent_array, "absent-array", buf, 2);
+}
+
+static const struct udevice_id test_dev_prop_ids[] = {
+	{ .compatible = "test,dev_prop" },
+	{ .compatible = "test,dev-prop-other" },
+	{ }
+};
+
+U_BOOT_DRIVER(test_dev_prop) = {
+	.name	= "test_dev_prop",
+	.id	= UCLASS_MISC,
+	.of_match = test_dev_prop_ids,
+};
+"""
+
+    def run_dev_prop(self, cmd, dts='dtoc_test_dev_prop.dts', instantiate=False):
+        """Run dtoc with the dev_prop test driver
+
+        Args:
+            cmd (str): dtoc command to run, e.g. 'struct'
+            dts (str): Devicetree source to use
+            instantiate (bool): True to instantiate devices
+
+        Returns:
+            str: Output
+        """
+        dtb_file = get_dtb_file(dts)
+        output = tools.get_output_filename('output')
+        scan = copy_scan()
+        scan._parse_driver('test_dev_prop.c', self.DEV_PROP_DRIVER)
+
+        # Scanning drivers normally links each one to its uclass
+        scan._drivers['test_dev_prop'].uclass = scan._uclass['UCLASS_MISC']
+        dtb_platdata.run_steps([cmd], dtb_file, False, output, [], None,
+                               instantiate, warning_disabled=True, scan=scan)
+        return tools.read_file(output, binary=False)
+
+    def test_dev_prop_struct(self):
+        """Test the struct generated for a driver which uses dev_prop_...()"""
+        data = self.run_dev_prop('struct')
+        self.assertIn('''struct dtd_drv_test_dev_prop {
+\tfdt32_t\t\tabsent_array[1];
+\tbool\t\tabsent_bool;
+\tstruct phandle_1_arg absent_clocks[1];
+\tfdt32_t\t\tabsent_u32;
+\tstruct phandle_1_arg clocks[1];
+\tfdt32_t\t\tmax_frequency;
+\tbool\t\tnon_removable;
+\tfdt32_t\t\treg[2];
+\tstruct {
+\t\tunsigned int absent_array:1;
+\t\tunsigned int absent_clocks:1;
+\t\tunsigned int absent_u32:1;
+\t\tunsigned int clocks:1;
+\t\tunsigned int max_frequency:1;
+\t} has;
+};
+''', data)
+        self.assertNotIn('unused_prop', data)
+
+    def test_dev_prop_plat(self):
+        """Test the data generated for a driver which uses dev_prop_...()"""
+        data = self.run_dev_prop('platdata')
+        self.assertIn('''static const struct dtd_drv_test_dev_prop dtv_dev_prop_a = {
+\t.clocks\t\t\t= {
+\t\t\t{0, {3}},},
+\t.max_frequency\t\t= 0x2faf080,
+\t.non_removable\t\t= true,
+\t.reg\t\t\t= {0x1000, 0x10},
+\t.has = {
+\t\t.clocks = 1,
+\t\t.max_frequency = 1,
+\t},
+};
+U_BOOT_DRVINFO(dev_prop_a) = {
+\t.name\t\t= "test_dev_prop",
+\t.plat\t\t= &dtv_dev_prop_a,
+\t.plat_size\t= DRIVER_INFO_DTPLAT,
+''', data)
+        self.assertIn('''static const struct dtd_drv_test_dev_prop dtv_dev_prop_b = {
+\t.reg\t\t\t= {0x2000, 0x10},
+};
+U_BOOT_DRVINFO(dev_prop_b) = {
+\t.name\t\t= "test_dev_prop",
+''', data)
+        self.assertNotIn('unused_prop', data)
+
+    def test_dev_prop_inst(self):
+        """Test instantiating a device whose driver uses dev_prop_...()"""
+        data = self.run_dev_prop('device', instantiate=True)
+        self.assertIn(
+            'static const struct dtd_drv_test_dev_prop dtv_dev_prop_a = {', data)
+        self.assertIn('''DM_DEVICE_INST(dev_prop_a) = {
+\t.driver\t\t= DM_DRIVER_REF(test_dev_prop),
+\t.name\t\t= "test_dev_prop",
+\t.dtplat_\t= &dtv_dev_prop_a,
+''', data)
+
+    def test_dev_prop_missing(self):
+        """Test a node without the 'reg' which its driver reads"""
+        with self.assertRaises(ValueError) as exc:
+            self.run_dev_prop('platdata', 'dtoc_test_dev_prop_noreg.dts')
+        self.assertIn("Node '/dev_prop-noreg' has no 'reg' property, needed by "
+                      "driver 'test_dev_prop'", str(exc.exception))
+
+    def test_dev_prop_no_node(self):
+        """Test that a driver using dev_prop_...() gets a struct with no node"""
+        data = self.run_dev_prop('struct', 'dtoc_test_simple.dts')
+        self.assertIn('''struct dtd_drv_test_dev_prop {
+\tfdt32_t\t\tabsent_array[1];
+\tbool\t\tabsent_bool;
+\tstruct phandle_1_arg absent_clocks[1];
+\tfdt32_t\t\tabsent_u32;
+\tstruct phandle_1_arg clocks[1];
+\tfdt32_t\t\tmax_frequency;
+\tbool\t\tnon_removable;
+\tfdt_addr_t\treg[2];
+''', data)
 
     def test_name(self):
         """Test conversion of device tree names to C identifiers"""

@@ -1,0 +1,16 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Test device tree file for dtoc, with a node lacking a property which its
+ * driver must have
+ *
+ * Copyright 2026 Simon Glass <sjg@chromium.org>
+ */
+
+/dts-v1/;
+
+/ {
+	dev_prop-noreg {
+		bootph-all;
+		compatible = "test,dev_prop";
+	};
+};

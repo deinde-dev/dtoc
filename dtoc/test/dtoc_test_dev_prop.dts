@@ -1,0 +1,36 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Test device tree file for dtoc, with a driver which uses the dev_prop helpers
+ *
+ * Copyright 2026 Simon Glass <sjg@chromium.org>
+ */
+
+/dts-v1/;
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	clk: clock-controller {
+		bootph-all;
+		compatible = "sandbox,clk";
+		#clock-cells = <1>;
+	};
+
+	dev_prop-a {
+		bootph-all;
+		compatible = "test,dev_prop";
+		reg = <0x1000 0x10>;
+		max-frequency = <50000000>;
+		non-removable;
+		clocks = <&clk 3>;
+		unused-prop = <3>;
+	};
+
+	dev_prop-b {
+		bootph-all;
+		/* Found from the driver's compatible strings, not its name */
+		compatible = "vendor,unknown", "test,dev-prop-other";
+		reg = <0x2000 0x10>;
+	};
+};
