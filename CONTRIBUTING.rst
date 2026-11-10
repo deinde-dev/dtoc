@@ -38,6 +38,22 @@ expected output updating. The CI uses the U-Boot commit given by
 The coverage check needs ``UBOOT_SRC`` too, since the skipped tests are the
 ones which cover most of the code.
 
+Checking compatibility with mainline U-Boot
+-------------------------------------------
+
+Mainline U-Boot has its own copy of dtoc, but this one should stay usable in
+its place: for a tree whose drivers do not use features which mainline lacks,
+such as the ``dev_prop_...()`` helpers, the generated code must be the same.
+To check this, build some boards with each dtoc and compare the output::
+
+    scripts/check-mainline.sh /path/to/mainline/u-boot /tmp/work \
+        sandbox_spl sandbox_noinst chromebook_jerry
+
+This uses the dtoc on the ``PATH``, or the one given by ``DTOC``. It needs the
+packages to build U-Boot for each board, including ``gcc-arm-linux-gnueabihf``
+for chromebook_jerry. It replaces ``tools/dtoc/dtoc`` in the mainline tree
+while it runs and puts it back afterwards.
+
 Building the documentation
 --------------------------
 
@@ -69,6 +85,12 @@ Continuous integration
 
 The *Tests* workflow runs the suite on Python 3.10-3.12, checks test coverage
 and builds and checks the package on every push and pull request.
+
+The *Mainline* workflow runs ``scripts/check-mainline.sh`` on every push and
+pull request, using the mainline release given by ``MAINLINE_REF`` in
+``.github/workflows/mainline.yml``. It also runs weekly against mainline's
+``next`` branch, so that a change in mainline which needs a matching change
+here shows up early. Update ``MAINLINE_REF`` after each mainline release.
 
 Making a release
 ----------------

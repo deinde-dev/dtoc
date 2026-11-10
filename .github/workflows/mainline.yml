@@ -1,0 +1,69 @@
+name: Mainline
+
+# Check that this dtoc generates the same code as mainline U-Boot's own dtoc,
+# so that it stays usable with mainline. Pushes and pull requests use a pinned
+# mainline release, so that a change in mainline cannot break them. A weekly
+# run uses mainline's 'next' branch, to show when mainline needs something new.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MAINLINE_REPO: https://github.com/u-boot/u-boot.git
+  MAINLINE_REF: v2026.10-rc5
+  # Boards which use of-platdata in just one phase (see check-mainline.sh)
+  BOARDS: sandbox_spl sandbox_noinst chromebook_jerry
+
+jobs:
+  compare:
+    name: Compare with mainline's dtoc
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install system packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y bc bison build-essential flex \
+            gcc-arm-linux-gnueabihf libgnutls28-dev libssl-dev swig uuid-dev
+
+      - name: Install dtoc
+        run: |
+          python -m pip install --upgrade pip setuptools
+          pip install -r requirements.txt
+          pip install -e .
+
+      - name: Fetch mainline U-Boot
+        run: |
+          ref="$MAINLINE_REF"
+          if [ "$GITHUB_EVENT_NAME" = schedule ]; then
+            ref=next
+          fi
+          git init -q u-boot
+          git -C u-boot fetch -q --depth 1 "$MAINLINE_REPO" "$ref"
+          git -C u-boot checkout -q FETCH_HEAD
+          echo "Mainline at $ref: $(git -C u-boot log -1 --format='%h %s')"
+
+      - name: Compare the generated code
+        run: scripts/check-mainline.sh u-boot work $BOARDS
+
+      - name: Upload the build logs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: mainline-logs
+          path: work/*.log
