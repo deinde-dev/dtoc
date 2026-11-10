@@ -8,6 +8,9 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.3.0 - 2026-11-10
+------------------
+
 Added
 ~~~~~
 - With no ``--source-dir``, an installed dtoc scans the ``srctree`` directory
