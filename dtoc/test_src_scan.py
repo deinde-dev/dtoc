@@ -101,7 +101,19 @@ class TestSrcScan(unittest.TestCase):
                 ('/usr/bin/dtoc', './'),
                 ('dtoc/main.py', './')):
             with mock.patch.object(sys, 'argv', [argv0]):
-                self.assertEqual(expect, src_scan.Scanner(None, None)._basedir)
+                with mock.patch.dict(os.environ, clear=True):
+                    self.assertEqual(expect,
+                                     src_scan.Scanner(None, None)._basedir)
+
+        # An installed dtoc uses the source directory exported by the U-Boot
+        # build, but the tree it is run from takes precedence
+        with mock.patch.dict(os.environ, {'srctree': '/my/src'}):
+            for argv0, expect in (
+                    ('/usr/bin/dtoc', '/my/src/'),
+                    ('/path/to/u-boot/tools/dtoc/dtoc', '/path/to/u-boot/')):
+                with mock.patch.object(sys, 'argv', [argv0]):
+                    self.assertEqual(expect,
+                                     src_scan.Scanner(None, None)._basedir)
 
         # A directory given explicitly is used as is
         self.assertEqual('/my/tree', src_scan.Scanner('/my/tree', None)._basedir)
