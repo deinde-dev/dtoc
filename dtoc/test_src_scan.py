@@ -133,6 +133,50 @@ class TestSrcScan(unittest.TestCase):
         self.assertRegex(stdout.getvalue(),
                          r"Skipping file '.*' due to unicode error\s*")
 
+    def test_dev_props(self):
+        """Test finding properties read with the dev_prop_...() helpers"""
+        buff = '''
+	DTPLAT(my_drv, dt, dev);
+	plat->base = dev_prop_addr(dev, dt);
+	plat->freq = dev_prop_u32_default(dev, dt, spi_max_frequency,
+					"spi-max-frequency", 5);
+	ret = dev_prop_clk(dev, dt, clocks, "clocks", 1, &clk);
+'''
+        drivers, props = src_scan.scan_dev_props('file.c', buff)
+        self.assertEqual(['my_drv'], drivers)
+        self.assertEqual({'spi_max_frequency': ('u32_default',
+                                                'spi-max-frequency'),
+                          'clocks': ('clk', 'clocks'),
+                          'reg': ('addr', 'reg')}, props)
+
+        # The member name must match the property name
+        with self.assertRaises(ValueError) as exc:
+            src_scan.scan_dev_props(
+                'file.c', 'DTPLAT(my_drv, dt, dev);\n'
+                'dev_prop_bool(dev, dt, wrong, "non-removable")')
+
+        # A file without DTPLAT() is not checked
+        self.assertEqual(([], {}), src_scan.scan_dev_props(
+            'file.c', 'dev_prop_bool(dev, dt, wrong, "non-removable")'))
+        self.assertIn("dev_prop_bool() member 'wrong' does not match property "
+                      "'non-removable'", str(exc.exception))
+
+        # The properties are recorded against the driver named in DTPLAT()
+        scan = src_scan.Scanner(None, None)
+        scan._parse_driver('file.c', buff + '''
+static const struct udevice_id my_ids[] = {
+	{ .compatible = "vendor,my" },
+	{ }
+};
+
+U_BOOT_DRIVER(my_drv) = {
+	.name	= "my_drv",
+	.id	= UCLASS_MISC,
+	.of_match = my_ids,
+};
+''')
+        self.assertEqual(props, scan._drivers['my_drv'].dev_props)
+
     def test_driver(self):
         """Test the Driver class"""
         i2c = 'I2C_UCLASS'

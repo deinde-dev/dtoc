@@ -188,6 +188,8 @@ class DtbPlatdata():
         self._lines = []
         self._dirnames = [None] * len(Ftype)
         self._struct_data = collections.OrderedDict()
+        # Driver for each struct generated for dev_prop_...() helpers
+        self._dev_prop_drivers = {}
         self._basedir = None
         self._valid_uclasses = None
         self._instantiate = instantiate
@@ -454,6 +456,7 @@ class DtbPlatdata():
             node.uclass_seq = None
             node.parent_seq = None
             node.parent_driver = None
+            node.dev_props = None
 
     @staticmethod
     def get_num_cells(node):
@@ -539,9 +542,8 @@ class DtbPlatdata():
             fields = {}
 
             # Get a list of all the valid properties in this node.
-            for name, prop in node.props.items():
-                if name not in PROP_IGNORE_LIST and name[0] != '#':
-                    fields[name] = copy.deepcopy(prop)
+            for name, prop in self.node_props(node).items():
+                fields[name] = copy.deepcopy(prop)
 
             # If we've seen this struct_name before, update the existing struct
             if node.struct_name in structs:
@@ -559,9 +561,8 @@ class DtbPlatdata():
 
         for node in self._valid_nodes:
             struct = structs[node.struct_name]
-            for name, prop in node.props.items():
-                if name not in PROP_IGNORE_LIST and name[0] != '#':
-                    prop.Widen(struct[name])
+            for name, prop in self.node_props(node).items():
+                prop.Widen(struct[name])
 
     def scan_phandles(self):
         """Figure out what phandles each node uses
@@ -603,7 +604,11 @@ class DtbPlatdata():
         self.out('#include <linux/libfdt.h>\n')
 
         # Output the struct definition
-        for name in sorted(structs):
+        for name in sorted(set(structs) | set(self._dev_prop_drivers)):
+            driver = self._dev_prop_drivers.get(name)
+            if driver:
+                self.output_dev_prop_struct(name, structs.get(name, {}), driver)
+                continue
             self.out('struct %s%s {\n' % (STRUCT_PREFIX, name))
             for pname in sorted(structs[name]):
                 prop = structs[name][pname]
@@ -622,6 +627,54 @@ class DtbPlatdata():
                         self.out('[%d]' % len(prop.value))
                 self.out(';\n')
             self.out('};\n')
+
+    def output_dev_prop_struct(self, name, struct, driver):
+        """Output the struct for a driver which uses dev_prop_...()
+
+        This has a member for each property the driver reads, whether or not
+        any node has it, plus a 'has' member with a flag for each optional
+        one, saying whether it is present
+
+        Args:
+            name (str): Struct name, e.g. 'drv_rockchip_rk3288_spi'
+            struct (dict): Properties seen in the nodes, keyed by name
+            driver (src_scan.Driver): Driver which uses this struct
+        """
+        self.out('struct %s%s {\n' % (STRUCT_PREFIX, name))
+        flags = []
+        for member, (kind, pname) in sorted(driver.dev_props.items()):
+            prop = struct.get(pname)
+            info = self.get_phandle_argc(prop, struct) if prop else None
+            if info:
+                ptype = 'struct phandle_%d_arg' % info.max_args
+                count = len(info.args)
+            elif prop:
+                ptype = TYPE_NAMES[prop.type]
+                count = (len(prop.value) if isinstance(prop.value, list)
+                         else None)
+            elif kind == 'bool':
+                ptype, count = 'bool', None
+            elif kind == 'clk':
+                ptype, count = 'struct phandle_1_arg', 1
+            elif kind == 'u32_array':
+                ptype, count = 'fdt32_t', 1
+            elif kind == 'u32_default':
+                ptype, count = 'fdt32_t', None
+            else:
+                # No node has 'reg', so nothing reads it
+                ptype, count = 'fdt_addr_t', 2
+            self.out('\t%s%s' % (tab_to(2, ptype), member))
+            if count is not None:
+                self.out('[%d]' % count)
+            self.out(';\n')
+            if kind in ('u32_default', 'u32_array', 'clk'):
+                flags.append(member)
+        if flags:
+            self.out('\tstruct {\n')
+            for member in flags:
+                self.out('\t\tunsigned int %s:1;\n' % member)
+            self.out('\t} has;\n')
+        self.out('};\n')
 
     def _output_list(self, node, prop):
         """Output the C code for a devicetree property that holds a list
@@ -671,10 +724,15 @@ class DtbPlatdata():
             node: Node to process
         """
         self.buf('U_BOOT_DRVINFO(%s) = {\n' % node.var_name)
-        self.buf('\t.name\t\t= "%s",\n' % node.struct_name)
-        self.buf('\t.plat\t\t= &%s%s,\n' % (VAL_PREFIX, node.var_name))
-        self.buf('\t.plat_size\t= sizeof(%s%s),\n' %
-                 (VAL_PREFIX, node.var_name))
+        if node.dev_props:
+            self.buf('\t.name\t\t= "%s",\n' % node.driver.name)
+            self.buf('\t.plat\t\t= &%s%s,\n' % (VAL_PREFIX, node.var_name))
+            self.buf('\t.plat_size\t= DRIVER_INFO_DTPLAT,\n')
+        else:
+            self.buf('\t.name\t\t= "%s",\n' % node.struct_name)
+            self.buf('\t.plat\t\t= &%s%s,\n' % (VAL_PREFIX, node.var_name))
+            self.buf('\t.plat_size\t= sizeof(%s%s),\n' %
+                     (VAL_PREFIX, node.var_name))
         idx = -1
         if node.parent and node.parent in self._valid_nodes:
             idx = node.parent.idx
@@ -729,8 +787,12 @@ class DtbPlatdata():
         uclass = node.uclass
         self.buf('\n')
         num_lines = len(self._lines)
-        plat_name = self.alloc_plat(driver.plat, driver.name, node.var_name,
-                                    node)
+        if node.dev_props:
+            plat_name = self.alloc_priv(driver.plat, driver.name,
+                                        node.var_name, '_plat')
+        else:
+            plat_name = self.alloc_plat(driver.plat, driver.name,
+                                        node.var_name, node)
         priv_name = self.alloc_priv(driver.priv, driver.name, node.var_name)
         parent_plat_name = None
         parent_priv_name = None
@@ -753,13 +815,16 @@ class DtbPlatdata():
         if num_lines != len(self._lines):
             self.buf('\n')
 
+        drv_name = driver.name if node.dev_props else node.struct_name
         self.buf('DM_DEVICE_INST(%s) = {\n' % node.var_name)
-        self.buf('\t.driver\t\t= DM_DRIVER_REF(%s),\n' % node.struct_name)
-        self.buf('\t.name\t\t= "%s",\n' % node.struct_name)
+        self.buf('\t.driver\t\t= DM_DRIVER_REF(%s),\n' % drv_name)
+        self.buf('\t.name\t\t= "%s",\n' % drv_name)
         if plat_name:
             self.buf('\t.plat_\t\t= %s,\n' % plat_name)
-        else:
+        elif not node.dev_props:
             self.buf('\t.plat_\t\t= &%s%s,\n' % (VAL_PREFIX, node.var_name))
+        if node.dev_props:
+            self.buf('\t.dtplat_\t= &%s%s,\n' % (VAL_PREFIX, node.var_name))
         if parent_plat_name:
             self.buf('\t.parent_plat_\t= %s,\n' % parent_plat_name)
         if uclass_plat_name:
@@ -834,10 +899,28 @@ class DtbPlatdata():
         Args:
             node (Node): Node to output
         """
-        self.buf('static struct %s%s %s%s = {\n' %
-                 (STRUCT_PREFIX, node.struct_name, VAL_PREFIX, node.var_name))
-        for pname in sorted(node.props):
-            self._output_prop(node, node.props[pname])
+        props = self.node_props(node)
+        if node.dev_props:
+            for kind, pname in node.dev_props.values():
+                if kind == 'addr' and pname not in props:
+                    raise ValueError("Node '%s' has no '%s' property, needed "
+                                     "by driver '%s'" %
+                                     (node.path, pname, node.driver.name))
+        self.buf('static %sstruct %s%s %s%s = {\n' %
+                 ('const ' if node.dev_props else '', STRUCT_PREFIX,
+                  node.struct_name, VAL_PREFIX, node.var_name))
+        for pname in sorted(props):
+            self._output_prop(node, props[pname])
+        if node.dev_props:
+            flags = [member for member, (kind, pname) in
+                     sorted(node.dev_props.items())
+                     if kind in ('u32_default', 'u32_array', 'clk') and
+                     pname in props]
+            if flags:
+                self.buf('\t.has = {\n')
+                for member in flags:
+                    self.buf('\t\t.%s = 1,\n' % member)
+                self.buf('\t},\n')
         self.buf('};\n')
 
     def list_head(self, head_member, node_member, node_refs, var_name):
@@ -940,7 +1023,8 @@ class DtbPlatdata():
         self.buf(
             '/* driver declarations - these allow DM_DRIVER_GET() to be used */\n')
         for node in nodes_to_output:
-            self.buf('extern U_BOOT_DRIVER(%s);\n' % node.struct_name);
+            self.buf('extern U_BOOT_DRIVER(%s);\n' %
+                     (node.driver.name if node.dev_props else node.struct_name))
         self.buf('\n')
 
         if self._instantiate:
@@ -1028,6 +1112,41 @@ class DtbPlatdata():
             uclass.node_refs[-1] = ref
             uclass.node_refs[len(uclass.devs)] = ref
 
+    def use_dev_props(self):
+        """Use a per-driver struct for nodes whose driver uses dev_prop_...()
+
+        Such a node's struct holds only the properties which its driver reads
+        and is named after the driver, as dtd_drv_<driver>. This sets
+        node.dev_props and node.struct_name for each one
+        """
+        # Every such driver gets a struct, even if no node uses it, since its
+        # source refers to the struct whenever it is built
+        self._dev_prop_drivers = {'drv_' + driver.name: driver
+                                for driver in self._scan._drivers.values()
+                                if driver.dev_props}
+        for node in self._valid_nodes:
+            driver = node.driver
+            if driver and driver.dev_props:
+                node.dev_props = driver.dev_props
+                node.struct_name = 'drv_' + driver.name
+
+    def node_props(self, node):
+        """Get the properties of a node which go in its struct
+
+        Args:
+            node (fdt.Node): Node to check
+
+        Returns:
+            dict: Properties, keyed by name
+        """
+        props = {name: prop for name, prop in node.props.items()
+                 if name not in PROP_IGNORE_LIST and name[0] != '#'}
+        if node.dev_props:
+            wanted = {name for _, name in node.dev_props.values()}
+            props = {name: prop for name, prop in props.items()
+                     if name in wanted}
+        return props
+
     def output_node_plat(self, node):
         """Output the C code for a node
 
@@ -1066,7 +1185,7 @@ class DtbPlatdata():
                  parent_driver.name if parent_driver else 'None'))
         self.buf('*/\n')
 
-        if not node.driver.plat:
+        if not node.driver.plat or node.dev_props:
             self._output_values(node)
         self._declare_device_inst(node, parent_driver)
 
@@ -1222,9 +1341,10 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
     plat.prepare_nodes()
     plat.scan_reg_sizes()
     plat.setup_output_dirs(output_dirs)
+    plat.process_nodes(instantiate)
+    plat.use_dev_props()
     plat.scan_structs()
     plat.scan_phandles()
-    plat.process_nodes(instantiate)
     plat.read_aliases()
     plat.assign_seqs()
 
