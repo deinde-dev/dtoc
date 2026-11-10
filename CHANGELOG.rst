@@ -8,6 +8,13 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Added
+~~~~~
+- With no ``--source-dir``, an installed dtoc scans the ``srctree`` directory
+  which the U-Boot build exports, before falling back to the current directory.
+  So a U-Boot whose Makefile does not give the directory, such as mainline, can
+  run it in place of its own dtoc.
+
 Changed
 ~~~~~~~
 - The ``U_BOOT_DRVINFO()`` for a device whose driver uses the

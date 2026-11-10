@@ -231,7 +231,10 @@ def default_basedir():
     """Work out the U-Boot source directory when none is given
 
     When run as tools/dtoc/dtoc from a U-Boot tree, this is the top of that
-    tree. Otherwise, as with an installed dtoc, it is the current directory.
+    tree. Otherwise, as with an installed dtoc, it is the 'srctree' directory
+    which the U-Boot build exports, so that a U-Boot whose Makefile does not
+    give the directory can still run an installed dtoc. Failing that, it is
+    the current directory.
 
     Returns:
         str: Path to the U-Boot source directory
@@ -241,6 +244,9 @@ def default_basedir():
         basedir = sys.argv[0][:-len(script)]
         if basedir:
             return basedir
+    srctree = os.environ.get('srctree')
+    if srctree:
+        return os.path.join(srctree, '')
     return './'
 
 

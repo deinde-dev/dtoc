@@ -103,8 +103,8 @@ def run_dtoc():
                       help='set number of processes to use for running tests')
     parser.add_argument(
         '-s', '--source-dir', type=str,
-        help='U-Boot source directory to scan for drivers (defaults to the '
-             'current directory)')
+        help='U-Boot source directory to scan for drivers (defaults to '
+             '$srctree, else the current directory)')
     if HAVE_TESTS:
         parser.add_argument('-t', '--test', action='store_true', dest='test',
                             default=False, help='run tests')

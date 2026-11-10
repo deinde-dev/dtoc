@@ -96,8 +96,10 @@ Options
 
 ``-s``, ``--source-dir``
     The U-Boot source tree to scan for drivers. This defaults to the top of the
-    U-Boot tree when dtoc is run as ``tools/dtoc/dtoc`` from one, and otherwise
-    to the current directory.
+    U-Boot tree when dtoc is run as ``tools/dtoc/dtoc`` from one. Otherwise it
+    defaults to the ``srctree`` directory which the U-Boot build exports, so
+    that the build can run an installed dtoc without giving this option, and
+    failing that to the current directory.
 
 ``-p``, ``--phase``
     The U-Boot phase which the code is for, such as ``spl`` or ``tpl``. Where
