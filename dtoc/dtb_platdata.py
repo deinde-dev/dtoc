@@ -190,6 +190,8 @@ class DtbPlatdata():
         self._struct_data = collections.OrderedDict()
         # Driver for each struct generated for dev_prop_...() helpers
         self._dev_prop_drivers = {}
+        # The node for each such driver which has just one, keyed by driver
+        self._dtplat_single = {}
         self._basedir = None
         self._valid_uclasses = None
         self._instantiate = instantiate
@@ -457,6 +459,7 @@ class DtbPlatdata():
             node.parent_seq = None
             node.parent_driver = None
             node.dev_props = None
+            node.dtplat_single = False
 
     @staticmethod
     def get_num_cells(node):
@@ -628,6 +631,46 @@ class DtbPlatdata():
                 self.out(';\n')
             self.out('};\n')
 
+    def generate_prop(self):
+        """Generate the accessors for data read with the dev_prop helpers
+
+        This writes out a DTPLAT_GET_<driver>() macro for each driver which
+        uses the dev_prop_...() helpers, along with the data for each such
+        driver which has just one node. U-Boot's dm/prop.h includes this file,
+        so only drivers which use the helpers see the data.
+        """
+        for driver in sorted(self._dev_prop_drivers.values(),
+                             key=lambda drv: drv.name):
+            self.output_dtplat_get(driver)
+            self.out('\n')
+
+    def output_dtplat_get(self, driver):
+        """Output the accessor for a driver's generated data
+
+        DTPLAT() uses DTPLAT_GET_<driver>() to find a device's generated data.
+        When only one node uses the driver, its data goes here, so that the
+        compiler can see the values in the driver and optimise accordingly,
+        e.g. dropping code for absent properties. U-Boot's DTPLAT_SINGLE()
+        then gives the data, using the node's index to check that the device
+        is the one bound from the node. Otherwise the data is in dt-plat.c or
+        dt-device.c and is found from the device.
+
+        Args:
+            driver (src_scan.Driver): Driver which uses dev_prop_...()
+        """
+        node = self._dtplat_single.get(driver.name)
+        if node:
+            self.out('/* %s is the only node for this driver */\n' %
+                     node.path)
+            self._output_values(node)
+            self.out(''.join(self.get_buf()))
+            self.out('#define DTPLAT_GET_%s(_dev)\t' % driver.name)
+            self.out('DTPLAT_SINGLE(_dev, %s%s, %d)\n' %
+                     (VAL_PREFIX, node.var_name, node.idx))
+        else:
+            self.out('#define DTPLAT_GET_%s(_dev)\tdev_get_dtplat(_dev)\n' %
+                     driver.name)
+
     def output_dev_prop_struct(self, name, struct, driver):
         """Output the struct for a driver which uses dev_prop_...()
 
@@ -726,7 +769,9 @@ class DtbPlatdata():
         self.buf('U_BOOT_DRVINFO(%s) = {\n' % node.var_name)
         if node.dev_props:
             self.buf('\t.name\t\t= "%s",\n' % node.driver.name)
-            self.buf('\t.plat\t\t= &%s%s,\n' % (VAL_PREFIX, node.var_name))
+            if not node.dtplat_single:
+                self.buf('\t.plat\t\t= &%s%s,\n' %
+                         (VAL_PREFIX, node.var_name))
         else:
             self.buf('\t.name\t\t= "%s",\n' % node.struct_name)
             self.buf('\t.plat\t\t= &%s%s,\n' % (VAL_PREFIX, node.var_name))
@@ -822,7 +867,7 @@ class DtbPlatdata():
             self.buf('\t.plat_\t\t= %s,\n' % plat_name)
         elif not node.dev_props:
             self.buf('\t.plat_\t\t= &%s%s,\n' % (VAL_PREFIX, node.var_name))
-        if node.dev_props:
+        if node.dev_props and not node.dtplat_single:
             self.buf('\t.dtplat_\t= &%s%s,\n' % (VAL_PREFIX, node.var_name))
         if parent_plat_name:
             self.buf('\t.parent_plat_\t= %s,\n' % parent_plat_name)
@@ -899,12 +944,6 @@ class DtbPlatdata():
             node (Node): Node to output
         """
         props = self.node_props(node)
-        if node.dev_props:
-            for kind, pname in node.dev_props.values():
-                if kind == 'addr' and pname not in props:
-                    raise ValueError("Node '%s' has no '%s' property, needed "
-                                     "by driver '%s'" %
-                                     (node.path, pname, node.driver.name))
         self.buf('static %sstruct %s%s %s%s = {\n' %
                  ('const ' if node.dev_props else '', STRUCT_PREFIX,
                   node.struct_name, VAL_PREFIX, node.var_name))
@@ -1123,11 +1162,24 @@ class DtbPlatdata():
         self._dev_prop_drivers = {'drv_' + driver.name: driver
                                 for driver in self._scan._drivers.values()
                                 if driver.dev_props}
+        users = collections.defaultdict(list)
         for node in self._valid_nodes:
             driver = node.driver
             if driver and driver.dev_props:
                 node.dev_props = driver.dev_props
                 node.struct_name = 'drv_' + driver.name
+                users[driver.name].append(node)
+                for kind, pname in node.dev_props.values():
+                    if kind == 'addr' and pname not in node.props:
+                        raise ValueError(
+                            "Node '%s' has no '%s' property, needed by "
+                            "driver '%s'" % (node.path, pname, driver.name))
+
+        # A driver with just one node has its data in dt-structs-gen.h
+        self._dtplat_single = {name: nodes[0] for name, nodes in users.items()
+                               if len(nodes) == 1}
+        for node in self._dtplat_single.values():
+            node.dtplat_single = True
 
     def node_props(self, node):
         """Get the properties of a node which go in its struct
@@ -1165,7 +1217,10 @@ class DtbPlatdata():
         else:
             self.buf('/* %s */\n' % line1)
 
-        self._output_values(node)
+        if node.dtplat_single:
+            self.buf('/* Data is in dt-prop.h */\n')
+        else:
+            self._output_values(node)
         self._declare_device(node)
 
         self.out(''.join(self.get_buf()))
@@ -1184,7 +1239,9 @@ class DtbPlatdata():
                  parent_driver.name if parent_driver else 'None'))
         self.buf('*/\n')
 
-        if not node.driver.plat or node.dev_props:
+        if node.dtplat_single:
+            self.buf('/* Data is in dt-prop.h */\n')
+        elif not node.driver.plat or node.dev_props:
             self._output_values(node)
         self._declare_device_inst(node, parent_driver)
 
@@ -1266,6 +1323,9 @@ OUTPUT_FILES_COMMON = {
     'decl':
         OutputFile(Ftype.HEADER, 'dt-decl.h', DtbPlatdata.generate_decl,
                    'Declares externs for all device/uclass instances'),
+    'prop':
+        OutputFile(Ftype.HEADER, 'dt-prop.h', DtbPlatdata.generate_prop,
+                   'Finds the data for drivers using the dev_prop helpers'),
     'struct':
         OutputFile(Ftype.HEADER, 'dt-structs-gen.h',
                    DtbPlatdata.generate_structs,

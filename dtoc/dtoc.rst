@@ -44,6 +44,14 @@ To do this, dtoc:
 - writes out a C struct for each driver's devicetree data, then the data
   itself for each node.
 
+For a driver which reads its properties with U-Boot's ``dev_prop_...()``
+helpers, the struct holds just the properties the driver reads, and the data
+is const and read in place. Where only one node uses such a driver, its data
+goes in ``dt-prop.h`` rather than with the other node data. U-Boot includes
+this header only in drivers which use the helpers, so the compiler can see the
+values when it compiles the driver. It can then drop code for properties the
+node does not have, or which have fixed values.
+
 With ``OF_PLATDATA_INST``, dtoc goes further and writes out the devices and
 uclasses themselves, so that U-Boot does not need to bind them at run time.
 
@@ -72,6 +80,13 @@ comma-separated list of the following:
 
 ``decl``
     ``dt-decl.h``: declarations for all the device and uclass instances
+
+``prop``
+    ``dt-prop.h``: a ``DTPLAT_GET_<driver>()`` macro for each driver which
+    uses the ``dev_prop_...()`` helpers, which finds a device's data. If only
+    one node uses the driver, the data itself is here too and the macro uses
+    U-Boot's ``DTPLAT_SINGLE()``, giving the node's index so that U-Boot can
+    check that the device is the one bound from the node
 
 ``platdata``
     ``dt-plat.c``: the platform data for each node, along with a
