@@ -52,6 +52,49 @@ def get_compat_name(node):
     return [conv_name_to_c(c) for c in compat]
 
 
+# Matches the driver named in DTPLAT(drv, var, dev)
+RE_DTPLAT = re.compile(r'\bDTPLAT\(\s*(\w+)\s*,')
+
+# Matches dev_prop_kind(dev, dt, member, "name", ...)
+RE_DEV_PROP = re.compile(
+    r'\bdev_prop_(\w+)\(\s*[^,()]+\s*,\s*\w+\s*,\s*(\w+)\s*,\s*"([^"]*)"')
+
+# Matches dev_prop_addr(dev, dt) and dev_prop_addr_ptr(dev, dt), which read 'reg'
+RE_DEV_PROP_ADDR = re.compile(r'\bdev_prop_addr(?:_ptr)?\(')
+
+
+def scan_dev_props(fname, buff):
+    """Find the properties which a source file reads with dev_prop_...()
+
+    Args:
+        fname (str): Filename, for errors
+        buff (str): Contents of the file
+
+    Returns:
+        tuple:
+            list of str: Drivers named in DTPLAT() in the file
+            dict: Properties read, keyed by C member name, each a tuple:
+                str: Kind of helper, e.g. 'u32_default'
+                str: Devicetree property name
+
+    Raises:
+        ValueError: A member name does not match its property name
+    """
+    drivers = RE_DTPLAT.findall(buff)
+    if not drivers:
+        return [], {}
+    props = {}
+    for kind, member, name in RE_DEV_PROP.findall(buff):
+        if conv_name_to_c(name) != member:
+            raise ValueError(
+                f"{fname}: dev_prop_{kind}() member '{member}' does not match "
+                f"property '{name}'")
+        props[member] = (kind, name)
+    if RE_DEV_PROP_ADDR.search(buff):
+        props['reg'] = ('addr', 'reg')
+    return drivers, props
+
+
 class Driver:
     """Information about a driver in U-Boot
 
@@ -78,6 +121,13 @@ class Driver:
         warn_dups (bool): True if the duplicates are not distinguisble using
             the phase
         uclass (Uclass): uclass for this driver
+        dev_props (dict): Properties the driver reads with the dev_prop_...()
+            helpers, which means dtoc generates a struct dtd_drv_<name> for
+            it holding just those:
+                key (str): C member name, e.g. 'spi_max_frequency'
+                value (tuple):
+                    str: Kind of helper, e.g. 'u32_default' or 'clk'
+                    str: Devicetree property name, e.g. 'spi-max-frequency'
     """
     def __init__(self, name, fname):
         self.name = name
@@ -94,6 +144,7 @@ class Driver:
         self.dups = []
         self.warn_dups = False
         self.uclass = None
+        self.dev_props = {}
 
     def __eq__(self, other):
         return (self.name == other.name and
@@ -273,14 +324,24 @@ class Scanner:
         """
         if not node.parent:
             compat_list_c = ['root_driver']
+            compats = []
         else:
             compat_list_c = get_compat_name(node)
+            compats = node.props['compatible'].value
+            if not isinstance(compats, list):
+                compats = [compats]
 
-        for compat_c in compat_list_c:
+        for idx, compat_c in enumerate(compat_list_c):
             if not compat_c in self._drivers.keys():
                 compat_c = self._driver_aliases.get(compat_c)
-                if not compat_c:
-                    continue
+            if not compat_c and idx < len(compats):
+                # A driver using the dev_prop_...() helpers can also be found
+                # from its compatible strings, so it needs no aliases
+                driver = self._compat_to_driver.get(compats[idx])
+                if driver and driver.dev_props:
+                    compat_c = driver.name
+            if not compat_c:
+                continue
 
             aliases_c = compat_list_c
             if compat_c in aliases_c:
@@ -589,6 +650,12 @@ class Scanner:
                     ids_name = ids_m.group(1)
                 elif m_alias:
                     self._driver_aliases[m_alias.group(2)] = m_alias.group(1)
+
+        # Record the properties read with the dev_prop_...() helpers
+        dtplat_drivers, dev_props = scan_dev_props(fname, buff)
+        for name in dtplat_drivers:
+            if name in drivers:
+                drivers[name].dev_props = dev_props
 
         # Make the updates based on what we found
         for driver in drivers.values():
