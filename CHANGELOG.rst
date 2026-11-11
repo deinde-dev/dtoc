@@ -8,6 +8,9 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.4.0 - 2026-11-11
+------------------
+
 Added
 ~~~~~
 - A ``prop`` command, part of ``all``, which writes ``dt-prop.h``. This
