@@ -8,6 +8,23 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Added
+~~~~~
+- A ``prop`` command, part of ``all``, which writes ``dt-prop.h``. This
+  has a ``DTPLAT_GET_<driver>()`` macro for each driver which uses U-Boot's
+  ``dev_prop_...()`` helpers, which U-Boot's ``DTPLAT()`` uses to find the
+  data.
+
+Changed
+~~~~~~~
+- For a driver which uses the ``dev_prop_...()`` helpers and has just one
+  node, the node's data goes in ``dt-prop.h`` instead of ``dt-plat.c`` or
+  ``dt-device.c``, so that the compiler can see the values in the driver and
+  drop code it does not need. The macro then uses U-Boot's
+  ``DTPLAT_SINGLE()`` with the node's index, so that U-Boot can check the
+  device. This needs a U-Boot which has these macros and includes
+  ``dt-prop.h``.
+
 0.3.0 - 2026-11-10
 ------------------
 
