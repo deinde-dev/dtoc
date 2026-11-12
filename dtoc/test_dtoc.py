@@ -301,6 +301,7 @@ U_BOOT_DRIVER(test_dev_prop) = {
         data = self.run_dev_prop('prop', 'dtoc_test_dev_prop_single.dts')
         self.assertIn('''
 /* /dev_prop-a is the only node for this driver */
+#include <test_data.h>
 static const struct dtd_drv_test_dev_prop dtv_dev_prop_a = {
 \t.clocks\t\t\t= {
 \t\t\t{0, {3}},},

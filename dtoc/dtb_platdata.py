@@ -940,9 +940,10 @@ class DtbPlatdata():
         """
         props = self.node_props(node)
         driver_data = self.get_dev_prop_driver_data(node)
-        if driver_data and not node.dtplat_single:
-            # dt-plat.c and dt-device.c need the driver's headers to see the
-            # value; dt-prop.h is included by the driver itself
+        if driver_data:
+            # The value may need the driver's headers. This includes dt-prop.h,
+            # which every driver using the dev_prop helpers includes, not just
+            # this one
             for hdr in node.driver.headers:
                 self.buf('#include %s\n' % hdr)
         self.buf('static %sstruct %s%s %s%s = {\n' %

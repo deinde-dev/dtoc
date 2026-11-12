@@ -8,6 +8,14 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Fixed
+~~~~~
+- ``dt-prop.h`` now includes the headers named by a driver's ``DM_HEADER()``
+  ahead of the data for a single-node driver which uses
+  ``dev_prop_driver_data()``. Every driver using the ``dev_prop_...()``
+  helpers includes ``dt-prop.h``, so the driver data must be valid in each
+  of them, not just in the driver which it belongs to.
+
 0.5.0 - 2026-11-11
 ------------------
 
