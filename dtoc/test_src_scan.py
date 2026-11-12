@@ -161,6 +161,12 @@ class TestSrcScan(unittest.TestCase):
                           'clocks': ('clk', 'clocks'),
                           'reg': ('addr', 'reg')}, props)
 
+        # A regmap also reads 'reg'
+        self.assertEqual((['my_drv'], {'reg': ('addr', 'reg')}),
+                         src_scan.scan_dev_props(
+                             'file.c', 'DTPLAT(my_drv, dt, dev);\n'
+                             'ret = dev_prop_regmap(dev, dt, &plat->map);'))
+
         # The member name must match the property name
         with self.assertRaises(ValueError) as exc:
             src_scan.scan_dev_props(

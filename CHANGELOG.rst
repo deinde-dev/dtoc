@@ -8,6 +8,11 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Added
+~~~~~
+- Support for U-Boot's ``dev_prop_regmap()`` helper, which reads ``reg``
+  like ``dev_prop_addr()`` does.
+
 0.4.0 - 2026-11-11
 ------------------
 

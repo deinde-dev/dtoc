@@ -59,8 +59,9 @@ RE_DTPLAT = re.compile(r'\bDTPLAT\(\s*(\w+)\s*,')
 RE_DEV_PROP = re.compile(
     r'\bdev_prop_(\w+)\(\s*[^,()]+\s*,\s*\w+\s*,\s*(\w+)\s*,\s*"([^"]*)"')
 
-# Matches dev_prop_addr(dev, dt) and dev_prop_addr_ptr(dev, dt), which read 'reg'
-RE_DEV_PROP_ADDR = re.compile(r'\bdev_prop_addr(?:_ptr)?\(')
+# Matches dev_prop_addr(dev, dt), dev_prop_addr_ptr(dev, dt) and
+# dev_prop_regmap(dev, dt, mapp), which read 'reg'
+RE_DEV_PROP_ADDR = re.compile(r'\bdev_prop_(?:addr(?:_ptr)?|regmap)\(')
 
 
 def scan_dev_props(fname, buff):
