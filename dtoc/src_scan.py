@@ -59,8 +59,13 @@ RE_DTPLAT = re.compile(r'\bDTPLAT\(\s*(\w+)\s*,')
 RE_DEV_PROP = re.compile(
     r'\bdev_prop_(\w+)\(\s*[^,()]+\s*,\s*\w+\s*,\s*(\w+)\s*,\s*"([^"]*)"')
 
-# Matches dev_prop_addr(dev, dt) and dev_prop_addr_ptr(dev, dt), which read 'reg'
-RE_DEV_PROP_ADDR = re.compile(r'\bdev_prop_addr(?:_ptr)?\(')
+# Matches dev_prop_addr(dev, dt), dev_prop_addr_ptr(dev, dt) and
+# dev_prop_regmap(dev, dt, mapp), which read 'reg'
+RE_DEV_PROP_ADDR = re.compile(r'\bdev_prop_(?:addr(?:_ptr)?|regmap)\(')
+
+# Matches dev_prop_driver_data(dev, dt), which reads the driver data from the
+# driver's of_match table for the compatible string the node matched
+RE_DEV_PROP_DRIVER_DATA = re.compile(r'\bdev_prop_driver_data\(')
 
 
 def scan_dev_props(fname, buff):
@@ -75,7 +80,7 @@ def scan_dev_props(fname, buff):
             list of str: Drivers named in DTPLAT() in the file
             dict: Properties read, keyed by C member name, each a tuple:
                 str: Kind of helper, e.g. 'u32_default'
-                str: Devicetree property name
+                str: Devicetree property name, or None for 'driver_data'
 
     Raises:
         ValueError: A member name does not match its property name
@@ -92,6 +97,8 @@ def scan_dev_props(fname, buff):
         props[member] = (kind, name)
     if RE_DEV_PROP_ADDR.search(buff):
         props['reg'] = ('addr', 'reg')
+    if RE_DEV_PROP_DRIVER_DATA.search(buff):
+        props['driver_data'] = ('driver_data', None)
     return drivers, props
 
 
@@ -127,7 +134,8 @@ class Driver:
                 key (str): C member name, e.g. 'spi_max_frequency'
                 value (tuple):
                     str: Kind of helper, e.g. 'u32_default' or 'clk'
-                    str: Devicetree property name, e.g. 'spi-max-frequency'
+                    str: Devicetree property name, e.g. 'spi-max-frequency',
+                        or None for 'driver_data'
     """
     def __init__(self, name, fname):
         self.name = name

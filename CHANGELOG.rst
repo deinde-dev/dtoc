@@ -8,6 +8,16 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Added
+~~~~~
+- Support for U-Boot's ``dev_prop_regmap()`` helper, which reads ``reg``
+  like ``dev_prop_addr()`` does.
+- Support for U-Boot's ``dev_prop_driver_data()`` helper. The generated
+  struct has a ``driver_data`` member holding the ``.data`` from the
+  driver's ``of_match`` table for the compatible string the node matched.
+  Where this data is in ``dt-plat.c`` or ``dt-device.c``, those include
+  the headers named by the driver's ``DM_HEADER()``.
+
 0.4.0 - 2026-11-11
 ------------------
 
