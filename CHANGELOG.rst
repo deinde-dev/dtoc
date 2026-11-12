@@ -8,6 +8,9 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.5.1 - 2026-11-12
+------------------
+
 Fixed
 ~~~~~
 - ``dt-prop.h`` now includes the headers named by a driver's ``DM_HEADER()``
