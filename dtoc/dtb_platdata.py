@@ -703,6 +703,8 @@ class DtbPlatdata():
                 ptype, count = 'fdt32_t', 1
             elif kind == 'u32_default':
                 ptype, count = 'fdt32_t', None
+            elif kind == 'driver_data':
+                ptype, count = 'ulong', None
             else:
                 # No node has 'reg', so nothing reads it
                 ptype, count = 'fdt_addr_t', 2
@@ -873,17 +875,10 @@ class DtbPlatdata():
             self.buf('\t.parent_plat_\t= %s,\n' % parent_plat_name)
         if uclass_plat_name:
             self.buf('\t.uclass_plat_\t= %s,\n' % uclass_plat_name)
-        driver_date = None
-
         if node != self._fdt.GetRoot():
-            compat_list = node.props['compatible'].value
-            if not isinstance(compat_list, list):
-                compat_list = [compat_list]
-            for compat in compat_list:
-                driver_data = driver.compat.get(compat)
-                if driver_data:
-                    self.buf('\t.driver_data\t= %s,\n' % driver_data)
-                    break
+            driver_data = self.get_driver_data(node)
+            if driver_data:
+                self.buf('\t.driver_data\t= %s,\n' % driver_data)
 
         if node.parent and node.parent.parent:
             if node.parent not in self._valid_nodes:
@@ -944,11 +939,19 @@ class DtbPlatdata():
             node (Node): Node to output
         """
         props = self.node_props(node)
+        driver_data = self.get_dev_prop_driver_data(node)
+        if driver_data and not node.dtplat_single:
+            # dt-plat.c and dt-device.c need the driver's headers to see the
+            # value; dt-prop.h is included by the driver itself
+            for hdr in node.driver.headers:
+                self.buf('#include %s\n' % hdr)
         self.buf('static %sstruct %s%s %s%s = {\n' %
                  ('const ' if node.dev_props else '', STRUCT_PREFIX,
                   node.struct_name, VAL_PREFIX, node.var_name))
         for pname in sorted(props):
             self._output_prop(node, props[pname])
+        if driver_data:
+            self.buf('\t.driver_data\t= %s,\n' % driver_data)
         if node.dev_props:
             flags = [member for member, (kind, pname) in
                      sorted(node.dev_props.items())
@@ -960,6 +963,40 @@ class DtbPlatdata():
                     self.buf('\t\t.%s = 1,\n' % member)
                 self.buf('\t},\n')
         self.buf('};\n')
+
+    @staticmethod
+    def get_driver_data(node):
+        """Get the driver data for the compatible string a node matched
+
+        Args:
+            node (Node): Node to check
+
+        Returns:
+            str: C expression for the driver data, from the driver's of_match
+                table, or None if there is none
+        """
+        compat_list = node.props['compatible'].value
+        if not isinstance(compat_list, list):
+            compat_list = [compat_list]
+        for compat in compat_list:
+            driver_data = node.driver.compat.get(compat)
+            if driver_data:
+                return driver_data
+        return None
+
+    def get_dev_prop_driver_data(self, node):
+        """Get the driver data for a node whose driver reads it
+
+        Args:
+            node (Node): Node to check
+
+        Returns:
+            str: C expression for the driver data, or None if the driver does
+                not use dev_prop_driver_data() or the node has no driver data
+        """
+        if not node.dev_props or 'driver_data' not in node.dev_props:
+            return None
+        return self.get_driver_data(node)
 
     def list_head(self, head_member, node_member, node_refs, var_name):
         self.buf('\t.%s\t= {\n' % head_member)

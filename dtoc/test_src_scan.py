@@ -167,6 +167,13 @@ class TestSrcScan(unittest.TestCase):
                              'file.c', 'DTPLAT(my_drv, dt, dev);\n'
                              'ret = dev_prop_regmap(dev, dt, &plat->map);'))
 
+        # The driver data is not a property
+        self.assertEqual(
+            (['my_drv'], {'driver_data': ('driver_data', None)}),
+            src_scan.scan_dev_props(
+                'file.c', 'DTPLAT(my_drv, dt, dev);\n'
+                'dev->driver_data = dev_prop_driver_data(dev, dt);'))
+
         # The member name must match the property name
         with self.assertRaises(ValueError) as exc:
             src_scan.scan_dev_props(

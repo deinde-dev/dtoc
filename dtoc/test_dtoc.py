@@ -219,9 +219,16 @@ static int test_dev_prop_of_to_plat(struct udevice *dev)
 	ret = dev_prop_u32_array(dev, dt, absent_array, "absent-array", buf, 2);
 }
 
+static int test_dev_prop_bind(struct udevice *dev)
+{
+	DTPLAT(test_dev_prop, dt, dev);
+
+	dev->driver_data = dev_prop_driver_data(dev, dt);
+}
+
 static const struct udevice_id test_dev_prop_ids[] = {
-	{ .compatible = "test,dev_prop" },
-	{ .compatible = "test,dev-prop-other" },
+	{ .compatible = "test,dev_prop", .data = TEST_DATA_A },
+	{ .compatible = "test,dev-prop-other", .data = TEST_DATA_OTHER },
 	{ }
 };
 
@@ -229,6 +236,7 @@ U_BOOT_DRIVER(test_dev_prop) = {
 	.name	= "test_dev_prop",
 	.id	= UCLASS_MISC,
 	.of_match = test_dev_prop_ids,
+	DM_HEADER(<test_data.h>)
 };
 """
 
@@ -263,6 +271,7 @@ U_BOOT_DRIVER(test_dev_prop) = {
 \tstruct phandle_1_arg absent_clocks[1];
 \tfdt32_t\t\tabsent_u32;
 \tstruct phandle_1_arg clocks[1];
+\tulong\t\tdriver_data;
 \tfdt32_t\t\tmax_frequency;
 \tbool\t\tnon_removable;
 \tfdt32_t\t\treg[2];
@@ -297,6 +306,7 @@ static const struct dtd_drv_test_dev_prop dtv_dev_prop_a = {
 \t\t\t{0, {3}},},
 \t.max_frequency\t\t= 0x2faf080,
 \t.reg\t\t\t= {0x1000, 0x10},
+\t.driver_data\t= TEST_DATA_A,
 \t.has = {
 \t\t.clocks = 1,
 \t\t.max_frequency = 1,
@@ -324,17 +334,20 @@ U_BOOT_DRVINFO(dev_prop_a) = {
         self.assertIn('''DM_DEVICE_INST(dev_prop_a) = {
 \t.driver\t\t= DM_DRIVER_REF(test_dev_prop),
 \t.name\t\t= "test_dev_prop",
+\t.driver_data\t= TEST_DATA_A,
 \t.uclass''', data)
 
     def test_dev_prop_plat(self):
         """Test the data generated for a driver which uses dev_prop_...()"""
         data = self.run_dev_prop('platdata')
-        self.assertIn('''static const struct dtd_drv_test_dev_prop dtv_dev_prop_a = {
+        self.assertIn('''#include <test_data.h>
+static const struct dtd_drv_test_dev_prop dtv_dev_prop_a = {
 \t.clocks\t\t\t= {
 \t\t\t{0, {3}},},
 \t.max_frequency\t\t= 0x2faf080,
 \t.non_removable\t\t= true,
 \t.reg\t\t\t= {0x1000, 0x10},
+\t.driver_data\t= TEST_DATA_A,
 \t.has = {
 \t\t.clocks = 1,
 \t\t.max_frequency = 1,
@@ -345,8 +358,11 @@ U_BOOT_DRVINFO(dev_prop_a) = {
 \t.plat\t\t= &dtv_dev_prop_a,
 \t.parent_idx\t= -1,
 ''', data)
-        self.assertIn('''static const struct dtd_drv_test_dev_prop dtv_dev_prop_b = {
+        # The driver data follows the compatible string which matched
+        self.assertIn('''#include <test_data.h>
+static const struct dtd_drv_test_dev_prop dtv_dev_prop_b = {
 \t.reg\t\t\t= {0x2000, 0x10},
+\t.driver_data\t= TEST_DATA_OTHER,
 };
 U_BOOT_DRVINFO(dev_prop_b) = {
 \t.name\t\t= "test_dev_prop",
@@ -380,6 +396,7 @@ U_BOOT_DRVINFO(dev_prop_b) = {
 \tstruct phandle_1_arg absent_clocks[1];
 \tfdt32_t\t\tabsent_u32;
 \tstruct phandle_1_arg clocks[1];
+\tulong\t\tdriver_data;
 \tfdt32_t\t\tmax_frequency;
 \tbool\t\tnon_removable;
 \tfdt_addr_t\treg[2];
