@@ -139,6 +139,17 @@ def get_value(ftype, value):
     return val
 
 
+# Kinds of dev_prop_...() helper which read an array of 32-bit integers, or its
+# size
+KINDS_ARRAY = ('u32_array', 'u32_array_ptr', 'size')
+
+# Kinds which read a single 32-bit integer
+KINDS_U32 = ('u32_default', 'u32')
+
+# Kinds whose property may be absent, so the struct has a flag for it
+KINDS_OPTIONAL = KINDS_ARRAY + KINDS_U32 + ('clk',)
+
+
 class DtbPlatdata():
     """Provide a means to convert device tree binary data to platform data
 
@@ -699,9 +710,9 @@ class DtbPlatdata():
                 ptype, count = 'bool', None
             elif kind == 'clk':
                 ptype, count = 'struct phandle_1_arg', 1
-            elif kind in ('u32_array', 'size'):
+            elif kind in KINDS_ARRAY:
                 ptype, count = 'fdt32_t', 1
-            elif kind in ('u32_default', 'u32'):
+            elif kind in KINDS_U32:
                 ptype, count = 'fdt32_t', None
             elif kind == 'driver_data':
                 ptype, count = 'ulong', None
@@ -712,7 +723,7 @@ class DtbPlatdata():
             if count is not None:
                 self.out('[%d]' % count)
             self.out(';\n')
-            if kind in ('u32_default', 'u32', 'u32_array', 'size', 'clk'):
+            if kind in KINDS_OPTIONAL:
                 flags.append(member)
         if flags:
             self.out('\tstruct {\n')
@@ -956,8 +967,7 @@ class DtbPlatdata():
         if node.dev_props:
             flags = [member for member, (kind, pname) in
                      sorted(node.dev_props.items())
-                     if kind in ('u32_default', 'u32', 'u32_array',
-                                 'size', 'clk') and
+                     if kind in KINDS_OPTIONAL and
                      pname in props]
             if flags:
                 self.buf('\t.has = {\n')

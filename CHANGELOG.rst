@@ -8,6 +8,12 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Added
+~~~~~
+- Support for U-Boot's ``dev_prop_u32_array_ptr()`` helper, which gives a
+  pointer to an array property, so the property is handled as for
+  ``dev_prop_u32_array()``.
+
 0.5.2 - 2026-11-13
 ------------------
 
