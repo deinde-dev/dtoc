@@ -8,6 +8,9 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.5.4 - 2026-11-13
+------------------
+
 Added
 ~~~~~
 - Support for U-Boot's ``dev_prop_clk_id()`` helper, which reads the ID of
