@@ -219,6 +219,13 @@ static int test_dev_prop_of_to_plat(struct udevice *dev)
 	ret = dev_prop_u32_array(dev, dt, absent_array, "absent-array", buf, 2);
 	size = dev_prop_size(dev, dt, absent_size, "absent-size");
 	ret = dev_prop_u32(dev, dt, absent_val, "absent-val", &val);
+	ret = dev_prop_u32_array_ptr(dev, dt, absent_ptr, "absent-ptr", &ptr,
+				     &count);
+	ret = dev_prop_u32_array_rw(dev, dt, absent_rw, "absent-rw", &rw,
+				    &count);
+
+	/* The driver may write to this one */
+	ret = dev_prop_u32_array_rw(dev, dt, rw_array, "rw-array", &rw, &count);
 }
 
 static int test_dev_prop_bind(struct udevice *dev)
@@ -271,6 +278,9 @@ U_BOOT_DRIVER(test_dev_prop) = {
 \tfdt32_t\t\tabsent_array[1];
 \tbool\t\tabsent_bool;
 \tstruct phandle_1_arg absent_clocks[1];
+\tfdt32_t\t\tabsent_ptr[1];
+\tfdt32_t\t\t*absent_rw;
+\tunsigned int\tabsent_rw_count;
 \tfdt32_t\t\tabsent_size[1];
 \tfdt32_t\t\tabsent_u32;
 \tfdt32_t\t\tabsent_val;
@@ -279,14 +289,19 @@ U_BOOT_DRIVER(test_dev_prop) = {
 \tfdt32_t\t\tmax_frequency;
 \tbool\t\tnon_removable;
 \tfdt32_t\t\treg[2];
+\tfdt32_t\t\t*rw_array;
+\tunsigned int\trw_array_count;
 \tstruct {
 \t\tunsigned int absent_array:1;
 \t\tunsigned int absent_clocks:1;
+\t\tunsigned int absent_ptr:1;
+\t\tunsigned int absent_rw:1;
 \t\tunsigned int absent_size:1;
 \t\tunsigned int absent_u32:1;
 \t\tunsigned int absent_val:1;
 \t\tunsigned int clocks:1;
 \t\tunsigned int max_frequency:1;
+\t\tunsigned int rw_array:1;
 \t} has;
 };
 ''', data)
@@ -307,25 +322,34 @@ U_BOOT_DRIVER(test_dev_prop) = {
         data = self.run_dev_prop('prop', 'dtoc_test_dev_prop_single.dts')
         self.assertIn('''
 /* /dev_prop-a is the only node for this driver */
+extern fdt32_t dtv_dev_prop_a_rw_array[9];
 #include <test_data.h>
 static const struct dtd_drv_test_dev_prop dtv_dev_prop_a = {
 \t.clocks\t\t\t= {
 \t\t\t{0, {3}},},
 \t.max_frequency\t\t= 0x2faf080,
 \t.reg\t\t\t= {0x1000, 0x10},
+\t.rw_array\t\t= dtv_dev_prop_a_rw_array,
+\t.rw_array_count\t\t= 9,
 \t.driver_data\t= TEST_DATA_A,
 \t.has = {
 \t\t.clocks = 1,
 \t\t.max_frequency = 1,
+\t\t.rw_array = 1,
 \t},
 };
 #define DTPLAT_GET_test_dev_prop(_dev)\tDTPLAT_SINGLE(_dev, dtv_dev_prop_a, 1)
 ''', data)
 
-        # The data is not repeated, nor pointed to by the device
+        # The data is not repeated, nor pointed to by the device. Only the
+        # array which the driver may write to is here, since it holds state
         data = self.run_dev_prop('platdata', 'dtoc_test_dev_prop_single.dts')
-        self.assertNotIn('dtv_dev_prop_a', data)
-        self.assertIn('''/* Data is in dt-prop.h */
+        self.assertNotIn('dtv_dev_prop_a =', data)
+        self.assertIn('''fdt32_t dtv_dev_prop_a_rw_array[9] = {
+\t0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8,
+\t0x9,
+};
+/* Data is in dt-prop.h */
 U_BOOT_DRVINFO(dev_prop_a) = {
 \t.name\t\t= "test_dev_prop",
 \t.parent_idx\t= -1,
@@ -336,8 +360,13 @@ U_BOOT_DRVINFO(dev_prop_a) = {
         """Test instantiating the only node using a dev_prop_...() driver"""
         data = self.run_dev_prop('device', 'dtoc_test_dev_prop_single.dts',
                                  instantiate=True)
-        self.assertIn('/* Data is in dt-prop.h */\n', data)
-        self.assertNotIn('dtv_dev_prop_a', data)
+        self.assertIn('''fdt32_t dtv_dev_prop_a_rw_array[9] = {
+\t0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8,
+\t0x9,
+};
+/* Data is in dt-prop.h */
+''', data)
+        self.assertNotIn('dtv_dev_prop_a =', data)
         self.assertIn('''DM_DEVICE_INST(dev_prop_a) = {
 \t.driver\t\t= DM_DRIVER_REF(test_dev_prop),
 \t.name\t\t= "test_dev_prop",
@@ -347,17 +376,24 @@ U_BOOT_DRVINFO(dev_prop_a) = {
     def test_dev_prop_plat(self):
         """Test the data generated for a driver which uses dev_prop_...()"""
         data = self.run_dev_prop('platdata')
-        self.assertIn('''#include <test_data.h>
+        self.assertIn('''fdt32_t dtv_dev_prop_a_rw_array[9] = {
+\t0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8,
+\t0x9,
+};
+#include <test_data.h>
 static const struct dtd_drv_test_dev_prop dtv_dev_prop_a = {
 \t.clocks\t\t\t= {
 \t\t\t{0, {3}},},
 \t.max_frequency\t\t= 0x2faf080,
 \t.non_removable\t\t= true,
 \t.reg\t\t\t= {0x1000, 0x10},
+\t.rw_array\t\t= dtv_dev_prop_a_rw_array,
+\t.rw_array_count\t\t= 9,
 \t.driver_data\t= TEST_DATA_A,
 \t.has = {
 \t\t.clocks = 1,
 \t\t.max_frequency = 1,
+\t\t.rw_array = 1,
 \t},
 };
 U_BOOT_DRVINFO(dev_prop_a) = {
@@ -401,6 +437,9 @@ U_BOOT_DRVINFO(dev_prop_b) = {
 \tfdt32_t\t\tabsent_array[1];
 \tbool\t\tabsent_bool;
 \tstruct phandle_1_arg absent_clocks[1];
+\tfdt32_t\t\tabsent_ptr[1];
+\tfdt32_t\t\t*absent_rw;
+\tunsigned int\tabsent_rw_count;
 \tfdt32_t\t\tabsent_size[1];
 \tfdt32_t\t\tabsent_u32;
 \tfdt32_t\t\tabsent_val;
@@ -409,6 +448,8 @@ U_BOOT_DRVINFO(dev_prop_b) = {
 \tfdt32_t\t\tmax_frequency;
 \tbool\t\tnon_removable;
 \tfdt_addr_t\treg[2];
+\tfdt32_t\t\t*rw_array;
+\tunsigned int\trw_array_count;
 ''', data)
 
         data = self.run_dev_prop('prop', 'dtoc_test_simple.dts')

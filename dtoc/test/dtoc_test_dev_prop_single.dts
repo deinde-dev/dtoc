@@ -23,6 +23,7 @@
 		compatible = "test,dev_prop";
 		reg = <0x1000 0x10>;
 		max-frequency = <50000000>;
+		rw-array = <1 2 3 4 5 6 7 8 9>;
 		clocks = <&clk 3>;
 	};
 };
