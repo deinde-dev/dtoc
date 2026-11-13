@@ -167,6 +167,19 @@ class TestSrcScan(unittest.TestCase):
                              'file.c', 'DTPLAT(my_drv, dt, dev);\n'
                              'ret = dev_prop_regmap(dev, dt, &plat->map);'))
 
+        # So does a PCI device/function
+        self.assertEqual((['my_drv'], {'reg': ('addr', 'reg')}),
+                         src_scan.scan_dev_props(
+                             'file.c', 'DTPLAT(my_drv, dt, dev);\n'
+                             'plat->bdf = dev_prop_pci_devfn(dev, dt);'))
+
+        # The size of an array property is read like the array
+        self.assertEqual(
+            (['my_drv'], {'routes': ('size', 'routes')}),
+            src_scan.scan_dev_props(
+                'file.c', 'DTPLAT(my_drv, dt, dev);\n'
+                'size = dev_prop_size(dev, dt, routes, "routes");'))
+
         # The driver data is not a property
         self.assertEqual(
             (['my_drv'], {'driver_data': ('driver_data', None)}),
