@@ -12,6 +12,9 @@ Added
 ~~~~~
 - Support for U-Boot's ``dev_prop_pci_devfn()`` helper, which reads
   ``reg`` like ``dev_prop_addr()`` does.
+- Support for U-Boot's ``dev_prop_u32()`` helper, which reads a 32-bit
+  property which must be present, so the property is handled as for
+  ``dev_prop_u32_default()``.
 - Support for U-Boot's ``dev_prop_size()`` helper, which reads the size
   of an array property, so the property is handled as for
   ``dev_prop_u32_array()``.

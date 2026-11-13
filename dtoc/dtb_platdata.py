@@ -701,7 +701,7 @@ class DtbPlatdata():
                 ptype, count = 'struct phandle_1_arg', 1
             elif kind in ('u32_array', 'size'):
                 ptype, count = 'fdt32_t', 1
-            elif kind == 'u32_default':
+            elif kind in ('u32_default', 'u32'):
                 ptype, count = 'fdt32_t', None
             elif kind == 'driver_data':
                 ptype, count = 'ulong', None
@@ -712,7 +712,7 @@ class DtbPlatdata():
             if count is not None:
                 self.out('[%d]' % count)
             self.out(';\n')
-            if kind in ('u32_default', 'u32_array', 'size', 'clk'):
+            if kind in ('u32_default', 'u32', 'u32_array', 'size', 'clk'):
                 flags.append(member)
         if flags:
             self.out('\tstruct {\n')
@@ -956,8 +956,8 @@ class DtbPlatdata():
         if node.dev_props:
             flags = [member for member, (kind, pname) in
                      sorted(node.dev_props.items())
-                     if kind in ('u32_default', 'u32_array', 'size',
-                                 'clk') and
+                     if kind in ('u32_default', 'u32', 'u32_array',
+                                 'size', 'clk') and
                      pname in props]
             if flags:
                 self.buf('\t.has = {\n')
