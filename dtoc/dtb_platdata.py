@@ -150,8 +150,11 @@ KIND_RW = 'u32_array_rw'
 # Kinds which read a single 32-bit integer
 KINDS_U32 = ('u32_default', 'u32')
 
+# Kinds which read a phandle and one argument from a 'clocks' property
+KINDS_CLK = ('clk', 'clk_id')
+
 # Kinds whose property may be absent, so the struct has a flag for it
-KINDS_OPTIONAL = KINDS_ARRAY + KINDS_U32 + ('clk',)
+KINDS_OPTIONAL = KINDS_ARRAY + KINDS_U32 + KINDS_CLK
 
 
 class DtbPlatdata():
@@ -713,7 +716,7 @@ class DtbPlatdata():
                          else None)
             elif kind == 'bool':
                 ptype, count = 'bool', None
-            elif kind == 'clk':
+            elif kind in KINDS_CLK:
                 ptype, count = 'struct phandle_1_arg', 1
             elif kind in KINDS_ARRAY:
                 ptype, count = 'fdt32_t', 1

@@ -8,6 +8,12 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Added
+~~~~~
+- Support for U-Boot's ``dev_prop_clk_id()`` helper, which reads the ID of
+  a clock without needing a clock driver, so the property is handled as
+  for ``dev_prop_clk()``.
+
 0.5.3 - 2026-11-13
 ------------------
 

@@ -216,6 +216,7 @@ static int test_dev_prop_of_to_plat(struct udevice *dev)
 	plat->val = dev_prop_u32_default(dev, dt, absent_u32, "absent-u32", 1);
 	plat->flag = dev_prop_bool(dev, dt, absent_bool, "absent-bool");
 	ret = dev_prop_clk(dev, dt, absent_clocks, "absent-clocks", 0, &clk);
+	ret = dev_prop_clk_id(dev, dt, absent_id, "absent-id", 0, &id);
 	ret = dev_prop_u32_array(dev, dt, absent_array, "absent-array", buf, 2);
 	size = dev_prop_size(dev, dt, absent_size, "absent-size");
 	ret = dev_prop_u32(dev, dt, absent_val, "absent-val", &val);
@@ -278,6 +279,7 @@ U_BOOT_DRIVER(test_dev_prop) = {
 \tfdt32_t\t\tabsent_array[1];
 \tbool\t\tabsent_bool;
 \tstruct phandle_1_arg absent_clocks[1];
+\tstruct phandle_1_arg absent_id[1];
 \tfdt32_t\t\tabsent_ptr[1];
 \tfdt32_t\t\t*absent_rw;
 \tunsigned int\tabsent_rw_count;
@@ -294,6 +296,7 @@ U_BOOT_DRIVER(test_dev_prop) = {
 \tstruct {
 \t\tunsigned int absent_array:1;
 \t\tunsigned int absent_clocks:1;
+\t\tunsigned int absent_id:1;
 \t\tunsigned int absent_ptr:1;
 \t\tunsigned int absent_rw:1;
 \t\tunsigned int absent_size:1;
@@ -437,6 +440,7 @@ U_BOOT_DRVINFO(dev_prop_b) = {
 \tfdt32_t\t\tabsent_array[1];
 \tbool\t\tabsent_bool;
 \tstruct phandle_1_arg absent_clocks[1];
+\tstruct phandle_1_arg absent_id[1];
 \tfdt32_t\t\tabsent_ptr[1];
 \tfdt32_t\t\t*absent_rw;
 \tunsigned int\tabsent_rw_count;
