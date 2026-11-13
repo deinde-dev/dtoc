@@ -8,6 +8,9 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.5.3 - 2026-11-13
+------------------
+
 Added
 ~~~~~
 - Support for U-Boot's ``dev_prop_u32_array_ptr()`` helper, which gives a
