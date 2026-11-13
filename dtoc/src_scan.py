@@ -59,9 +59,11 @@ RE_DTPLAT = re.compile(r'\bDTPLAT\(\s*(\w+)\s*,')
 RE_DEV_PROP = re.compile(
     r'\bdev_prop_(\w+)\(\s*[^,()]+\s*,\s*\w+\s*,\s*(\w+)\s*,\s*"([^"]*)"')
 
-# Matches dev_prop_addr(dev, dt), dev_prop_addr_ptr(dev, dt) and
-# dev_prop_regmap(dev, dt, mapp), which read 'reg'
-RE_DEV_PROP_ADDR = re.compile(r'\bdev_prop_(?:addr(?:_ptr)?|regmap)\(')
+# Matches dev_prop_addr(dev, dt), dev_prop_addr_ptr(dev, dt),
+# dev_prop_regmap(dev, dt, mapp) and dev_prop_pci_devfn(dev, dt), which read
+# 'reg'
+RE_DEV_PROP_ADDR = re.compile(
+    r'\bdev_prop_(?:addr(?:_ptr)?|regmap|pci_devfn)\(')
 
 # Matches dev_prop_driver_data(dev, dt), which reads the driver data from the
 # driver's of_match table for the compatible string the node matched
