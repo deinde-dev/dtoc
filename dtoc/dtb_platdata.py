@@ -141,7 +141,11 @@ def get_value(ftype, value):
 
 # Kinds of dev_prop_...() helper which read an array of 32-bit integers, or its
 # size
-KINDS_ARRAY = ('u32_array', 'u32_array_ptr', 'size')
+KINDS_ARRAY = ('u32_array', 'u32_array_ptr', 'u32_array_rw', 'size')
+
+# Kind which reads an array that the driver may write to. The array is kept
+# outside the struct, which is const, with the struct pointing to it
+KIND_RW = 'u32_array_rw'
 
 # Kinds which read a single 32-bit integer
 KINDS_U32 = ('u32_default', 'u32')
@@ -673,6 +677,7 @@ class DtbPlatdata():
         if node:
             self.out('/* %s is the only node for this driver */\n' %
                      node.path)
+            self._output_rw_arrays(node, True)
             self._output_values(node)
             self.out(''.join(self.get_buf()))
             self.out('#define DTPLAT_GET_%s(_dev)\t' % driver.name)
@@ -719,10 +724,15 @@ class DtbPlatdata():
             else:
                 # No node has 'reg', so nothing reads it
                 ptype, count = 'fdt_addr_t', 2
-            self.out('\t%s%s' % (tab_to(2, ptype), member))
-            if count is not None:
-                self.out('[%d]' % count)
-            self.out(';\n')
+            if kind == KIND_RW:
+                self.out('\t%s*%s;\n' % (tab_to(2, 'fdt32_t'), member))
+                self.out('\t%s%s_count;\n' % (tab_to(2, 'unsigned int'),
+                                              member))
+            else:
+                self.out('\t%s%s' % (tab_to(2, ptype), member))
+                if count is not None:
+                    self.out('[%d]' % count)
+                self.out(';\n')
             if kind in KINDS_OPTIONAL:
                 flags.append(member)
         if flags:
@@ -943,6 +953,70 @@ class DtbPlatdata():
             self.buf(get_value(prop.type, prop.value))
         self.buf(',\n')
 
+    @staticmethod
+    def get_rw_props(node):
+        """Get the properties of a node which the driver may write to
+
+        Args:
+            node (Node): Node to check
+
+        Returns:
+            set of str: Names of the properties present in the node which its
+                driver reads with dev_prop_u32_array_rw()
+        """
+        if not node.dev_props:
+            return set()
+        return {pname for kind, pname in node.dev_props.values()
+                if kind == KIND_RW and pname in node.props}
+
+    @staticmethod
+    def get_rw_values(prop):
+        """Get the values of a property as a list of C expressions
+
+        Args:
+            prop (fdt.Prop): Property to read
+
+        Returns:
+            list of str: Value of each cell
+        """
+        vals = prop.value if isinstance(prop.value, list) else [prop.value]
+        return [get_value(prop.type, val) for val in vals]
+
+    @staticmethod
+    def rw_array_name(node, member):
+        """Get the name of the array holding a writable property
+
+        Args:
+            node (Node): Node which has the property
+            member (str): C member name of the property
+
+        Returns:
+            str: Name of the C array
+        """
+        return '%s%s_%s' % (VAL_PREFIX, node.var_name, member)
+
+    def _output_rw_arrays(self, node, extern):
+        """Output the arrays for the properties which a driver may write to
+
+        These are defined once, in dt-plat.c or dt-device.c, since they hold
+        state. dt-prop.h has an extern declaration for each, for the struct
+        there to refer to.
+
+        Args:
+            node (Node): Node to output
+            extern (bool): True to declare the arrays, False to define them
+        """
+        for pname in sorted(self.get_rw_props(node)):
+            vals = self.get_rw_values(node.props[pname])
+            name = self.rw_array_name(node, conv_name_to_c(pname))
+            if extern:
+                self.buf('extern fdt32_t %s[%d];\n' % (name, len(vals)))
+                continue
+            self.buf('fdt32_t %s[%d] = {' % (name, len(vals)))
+            for i in range(0, len(vals), 8):
+                self.buf('\n\t%s,' % ', '.join(vals[i:i + 8]))
+            self.buf('\n};\n')
+
     def _output_values(self, node):
         """Output the definition of a device's struct values
 
@@ -960,8 +1034,18 @@ class DtbPlatdata():
         self.buf('static %sstruct %s%s %s%s = {\n' %
                  ('const ' if node.dev_props else '', STRUCT_PREFIX,
                   node.struct_name, VAL_PREFIX, node.var_name))
+        rw_props = self.get_rw_props(node)
         for pname in sorted(props):
-            self._output_prop(node, props[pname])
+            if pname in rw_props:
+                member = conv_name_to_c(pname)
+                self.buf('\t%s= %s,\n' % (
+                    tab_to(3, '.' + member),
+                    self.rw_array_name(node, member)))
+                self.buf('\t%s= %d,\n' % (
+                    tab_to(3, '.%s_count' % member),
+                    len(self.get_rw_values(props[pname]))))
+            else:
+                self._output_prop(node, props[pname])
         if driver_data:
             self.buf('\t.driver_data\t= %s,\n' % driver_data)
         if node.dev_props:
@@ -1266,6 +1350,7 @@ class DtbPlatdata():
         else:
             self.buf('/* %s */\n' % line1)
 
+        self._output_rw_arrays(node, False)
         if node.dtplat_single:
             self.buf('/* Data is in dt-prop.h */\n')
         else:
@@ -1288,6 +1373,7 @@ class DtbPlatdata():
                  parent_driver.name if parent_driver else 'None'))
         self.buf('*/\n')
 
+        self._output_rw_arrays(node, False)
         if node.dtplat_single:
             self.buf('/* Data is in dt-prop.h */\n')
         elif not node.driver.plat or node.dev_props:

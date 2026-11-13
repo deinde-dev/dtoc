@@ -13,6 +13,10 @@ Added
 - Support for U-Boot's ``dev_prop_u32_array_ptr()`` helper, which gives a
   pointer to an array property, so the property is handled as for
   ``dev_prop_u32_array()``.
+- Support for U-Boot's ``dev_prop_u32_array_rw()`` helper, for an array
+  which the driver may write to. The array is kept outside the struct, which
+  stays ``const`` and holds a pointer to the array and its length. The array
+  has exactly the number of cells in the node.
 
 0.5.2 - 2026-11-13
 ------------------
