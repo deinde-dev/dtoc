@@ -208,7 +208,8 @@ class DtbPlatdata():
         _instantiate: Instantiate devices so they don't need to be bound at
             run-time
     """
-    def __init__(self, scan, dtb_fname, include_disabled, instantiate=False):
+    def __init__(self, scan, dtb_fname, include_disabled, instantiate=False,
+                 props_only=False):
         self._scan = scan
         self._fdt = None
         self._dtb_fname = dtb_fname
@@ -231,6 +232,8 @@ class DtbPlatdata():
         self._basedir = None
         self._valid_uclasses = None
         self._instantiate = instantiate
+        # True to emit no data for a driver which has no dev_prop_...() calls
+        self._props_only = props_only
 
     def setup_output_dirs(self, output_dirs):
         """Set up the output directories
@@ -500,6 +503,7 @@ class DtbPlatdata():
             node.parent_driver = None
             node.dev_props = None
             node.dtplat_single = False
+            node.no_data = False
 
     @staticmethod
     def get_num_cells(node):
@@ -582,6 +586,8 @@ class DtbPlatdata():
         """
         structs = self._struct_data
         for node in self._valid_nodes:
+            if node.no_data:
+                continue
             fields = {}
 
             # Get a list of all the valid properties in this node.
@@ -603,6 +609,8 @@ class DtbPlatdata():
                 structs[node.struct_name] = fields
 
         for node in self._valid_nodes:
+            if node.no_data:
+                continue
             struct = structs[node.struct_name]
             for name, prop in self.node_props(node).items():
                 prop.Widen(struct[name])
@@ -620,9 +628,10 @@ class DtbPlatdata():
         """
         for node in self._valid_nodes:
             node.phandles = set()
-            for pname, prop in node.props.items():
-                if pname in PROP_IGNORE_LIST or pname[0] == '#':
-                    continue
+
+            # Only look at properties which are output, so that one which the
+            # driver does not read may refer to a node which is not present
+            for prop in self.node_props(node).values():
                 info = self.get_phandle_argc(prop, node.name)
                 if info:
                     # Process the list as pairs of (phandle, id)
@@ -818,7 +827,10 @@ class DtbPlatdata():
             node: Node to process
         """
         self.buf('U_BOOT_DRVINFO(%s) = {\n' % node.var_name)
-        if node.dev_props:
+        if node.no_data:
+            self.buf('\t.name\t\t= "%s",\n' %
+                     (node.driver.name if node.driver else node.struct_name))
+        elif node.dev_props:
             self.buf('\t.name\t\t= "%s",\n' % node.driver.name)
             if not node.dtplat_single:
                 self.buf('\t.plat\t\t= &%s%s,\n' %
@@ -1345,6 +1357,12 @@ class DtbPlatdata():
         for node in self._dtplat_single.values():
             node.dtplat_single = True
 
+        # Any other node has no data, since nothing reads it
+        if self._props_only:
+            for node in self._valid_nodes:
+                if not node.dev_props:
+                    node.no_data = True
+
     def node_props(self, node):
         """Get the properties of a node which go in its struct
 
@@ -1354,6 +1372,8 @@ class DtbPlatdata():
         Returns:
             dict: Properties, keyed by name
         """
+        if node.no_data:
+            return {}
         props = {name: prop for name, prop in node.props.items()
                  if name not in PROP_IGNORE_LIST and name[0] != '#'}
         if node.dev_props:
@@ -1382,7 +1402,9 @@ class DtbPlatdata():
             self.buf('/* %s */\n' % line1)
 
         self._output_rw_arrays(node, False)
-        if node.dtplat_single:
+        if node.no_data:
+            self.buf('/* The driver reads no properties */\n')
+        elif node.dtplat_single:
             self.buf('/* Data is in dt-prop.h */\n')
         else:
             self._output_values(node)
@@ -1518,7 +1540,7 @@ OUTPUT_FILES_INST = {
 
 def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
               instantiate, warning_disabled=False, drivers_additional=None,
-              basedir=None, scan=None):
+              basedir=None, scan=None, props_only=False):
     """Run all the steps of the dtoc tool
 
     Args:
@@ -1560,7 +1582,9 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
         do_process = True
     else:
         do_process = False
-    plat = DtbPlatdata(scan, dtb_file, include_disabled, instantiate)
+    scan.props_only = props_only
+    plat = DtbPlatdata(scan, dtb_file, include_disabled, instantiate,
+                       props_only)
     plat.scan_dtb()
     plat.scan_tree(add_root=instantiate)
     plat.prepare_nodes()
