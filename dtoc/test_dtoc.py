@@ -257,13 +257,16 @@ U_BOOT_DRIVER(test_dev_prop) = {
 };
 """
 
-    def run_dev_prop(self, cmd, dts='dtoc_test_dev_prop.dts', instantiate=False):
+    def run_dev_prop(self, cmd, dts='dtoc_test_dev_prop.dts', instantiate=False,
+                     props_only=False):
         """Run dtoc with the dev_prop test driver
 
         Args:
             cmd (str): dtoc command to run, e.g. 'struct'
             dts (str): Devicetree source to use
             instantiate (bool): True to instantiate devices
+            props_only (bool): True to generate data only for a driver which
+                uses the dev_prop helpers
 
         Returns:
             str: Output
@@ -276,8 +279,85 @@ U_BOOT_DRIVER(test_dev_prop) = {
         # Scanning drivers normally links each one to its uclass
         scan._drivers['test_dev_prop'].uclass = scan._uclass['UCLASS_MISC']
         dtb_platdata.run_steps([cmd], dtb_file, False, output, [], None,
-                               instantiate, warning_disabled=True, scan=scan)
+                               instantiate, warning_disabled=True, scan=scan,
+                               props_only=props_only)
         return tools.read_file(output, binary=False)
+
+    def test_props_only(self):
+        """Test generating data only for drivers which use dev_prop_...()"""
+        data = self.run_dev_prop('struct', props_only=True)
+        self.assertIn('struct dtd_drv_test_dev_prop {', data)
+        self.assertNotIn('struct dtd_sandbox_clk', data)
+        self.assertNotIn('struct dtd_sandbox_gpio', data)
+
+        # A driver which reads nothing has a record with no data, which keeps
+        # its place so that the indexes do not change
+        data = self.run_dev_prop('platdata', props_only=True)
+        self.assertIn('''/*
+ * Node /clock-controller index 0
+ * driver sandbox_clk parent None
+ */
+/* The driver reads no properties */
+U_BOOT_DRVINFO(clock_controller) = {
+\t.name\t\t= "sandbox_clk",
+\t.parent_idx\t= -1,
+};
+''', data)
+        self.assertNotIn('dtv_clock_controller', data)
+        self.assertNotIn('plat_size', data)
+        self.assertIn('''\t.test_gpios\t\t= {
+\t\t\t{3, {2, 1}},},''', data)
+
+    PLAIN_DRIVER = """
+static const struct udevice_id test_plain_ids[] = {
+	{ .compatible = "test,plain" },
+	{ }
+};
+
+U_BOOT_DRIVER(test_plain) = {
+	.name	= "test_plain",
+	.id	= UCLASS_MISC,
+	.of_match = test_plain_ids,
+};
+"""
+
+    def run_plain(self, props_only):
+        """Run dtoc with a driver which reads no properties
+
+        Args:
+            props_only (bool): True to generate data only for a driver which
+                uses the dev_prop helpers
+
+        Returns:
+            str: Contents of dt-plat.c
+        """
+        dtb_file = get_dtb_file('dtoc_test_props_only.dts')
+        output = tools.get_output_filename('output')
+        scan = copy_scan()
+        scan._parse_driver('test_plain.c', self.PLAIN_DRIVER)
+        scan._drivers['test_plain'].uclass = scan._uclass['UCLASS_MISC']
+        dtb_platdata.run_steps(['platdata'], dtb_file, False, output, [],
+                               None, False, warning_disabled=True, scan=scan,
+                               props_only=props_only)
+        return tools.read_file(output, binary=False)
+
+    def test_props_only_compat(self):
+        """Test finding a driver which reads nothing from its compatibles"""
+        data = self.run_plain(True)
+        self.assertIn('''/* The driver reads no properties */
+U_BOOT_DRVINFO(plain) = {
+\t.name\t\t= "test_plain",
+\t.parent_idx\t= -1,
+};
+''', data)
+
+        # Otherwise the driver is named for the first compatible string. The
+        # node has all its properties, so 'clocks' cannot be parsed, since the
+        # clock controller is not in this phase
+        with self.assertRaises(ValueError) as exc:
+            self.run_plain(False)
+        self.assertIn("Cannot parse 'clocks' in node 'plain'",
+                      str(exc.exception))
 
     def test_dev_prop_struct(self):
         """Test the struct generated for a driver which uses dev_prop_...()"""

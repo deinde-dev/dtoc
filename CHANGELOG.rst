@@ -15,6 +15,14 @@ Added
 - Support for U-Boot's ``dev_prop_dev()`` helper, which reads a phandle with
   no arguments from any property, to refer to another device.
 - Support for U-Boot's ``dev_prop_string()`` helper, which reads a string.
+- A ``--props-only`` option, which generates data only for a driver which
+  uses the ``dev_prop_...()`` helpers. Any other node has a record with no
+  data and its driver is found from its compatible strings.
+
+Changed
+~~~~~~~
+- A phandle is only parsed if its property is output, so a property which
+  the driver does not read may refer to a node which is not present.
 
 0.5.4 - 2026-11-13
 ------------------

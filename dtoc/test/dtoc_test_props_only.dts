@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Test device tree file for dtoc, with a driver which reads no properties
+ *
+ * Copyright 2026 Simon Glass <sjg@chromium.org>
+ */
+
+/dts-v1/;
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	plain {
+		bootph-all;
+		/* Found from the driver's compatible strings, not its name */
+		compatible = "vendor,first", "test,plain";
+		reg = <0x1000 0x10>;
+		/* This refers to a node which is not in this phase */
+		clocks = <99 1>;
+	};
+};

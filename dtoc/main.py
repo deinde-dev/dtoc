@@ -99,6 +99,10 @@ def run_dtoc():
     parser.add_argument(
         '-p', '--phase', type=str,
         help='set phase of U-Boot this invocation is for (spl/tpl)')
+    parser.add_argument(
+        '--props-only', action='store_true',
+        help='Only generate data which a driver reads with the dev_prop '
+             'helpers')
     parser.add_argument('-P', '--processes', type=int,
                       help='set number of processes to use for running tests')
     parser.add_argument(
@@ -127,7 +131,8 @@ def run_dtoc():
                                args.output,
                                [args.c_output_dir, args.h_output_dir],
                                args.phase, instantiate=args.instantiate,
-                               basedir=args.source_dir)
+                               basedir=args.source_dir,
+                               props_only=args.props_only)
 
 
 if __name__ == '__main__':
