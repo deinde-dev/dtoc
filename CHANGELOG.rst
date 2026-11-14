@@ -8,6 +8,14 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Added
+~~~~~
+- Support for U-Boot's ``dev_prop_gpio()`` and ``dev_prop_irq()`` helpers,
+  which read a phandle with up to two arguments.
+- Support for U-Boot's ``dev_prop_dev()`` helper, which reads a phandle with
+  no arguments from any property, to refer to another device.
+- Support for U-Boot's ``dev_prop_string()`` helper, which reads a string.
+
 0.5.4 - 2026-11-13
 ------------------
 
