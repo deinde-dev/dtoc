@@ -374,6 +374,43 @@ extern U_BOOT_DRIVER(test_plain);
             self.run_plain(False, True)
         self.assertIn('--driver-ref needs --props-only', str(exc.exception))
 
+    def test_parent_first(self):
+        """Test naming each node so that it sorts after its parent"""
+        dtb_file = get_dtb_file('dtoc_test_parent_first.dts')
+        output = tools.get_output_filename('output')
+
+        # Normally the child comes first, since it is named after its node
+        dtb_platdata.run_steps(['platdata'], dtb_file, False, output, [],
+                               None, False, warning_disabled=True,
+                               scan=copy_scan())
+        data = tools.read_file(output, binary=False)
+        self.assertIn(''' *   0: a_pmic_at_9          sandbox_pmic
+ *   1: z_i2c_at_0           sandbox_i2c
+''', data)
+        self.assertIn('''U_BOOT_DRVINFO(a_pmic_at_9) = {
+\t.name\t\t= "sandbox_pmic",
+\t.plat\t\t= &dtv_a_pmic_at_9,
+\t.plat_size\t= sizeof(dtv_a_pmic_at_9),
+\t.parent_idx\t= 1,
+};
+''', data)
+
+        # With parent_first it is named after its path, so comes second
+        dtb_platdata.run_steps(['platdata'], dtb_file, False, output, [],
+                               None, False, warning_disabled=True,
+                               scan=copy_scan(), parent_first=True)
+        data = tools.read_file(output, binary=False)
+        self.assertIn(''' *   0: z_i2c_at_0           sandbox_i2c
+ *   1: z_i2c_at_0_a_pmic_at_9 sandbox_pmic
+''', data)
+        self.assertIn('''U_BOOT_DRVINFO(z_i2c_at_0_a_pmic_at_9) = {
+\t.name\t\t= "sandbox_pmic",
+\t.plat\t\t= &dtv_z_i2c_at_0_a_pmic_at_9,
+\t.plat_size\t= sizeof(dtv_z_i2c_at_0_a_pmic_at_9),
+\t.parent_idx\t= 0,
+};
+''', data)
+
     def test_props_only_compat(self):
         """Test finding a driver which reads nothing from its compatibles"""
         data = self.run_plain(True)

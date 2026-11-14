@@ -107,6 +107,9 @@ def run_dtoc():
         '--props-only', action='store_true',
         help='Only generate data which a driver reads with the dev_prop '
              'helpers')
+    parser.add_argument(
+        '--parent-first', action='store_true',
+        help='Name each device record so that it sorts after its parent')
     parser.add_argument('-P', '--processes', type=int,
                       help='set number of processes to use for running tests')
     parser.add_argument(
@@ -137,7 +140,8 @@ def run_dtoc():
                                args.phase, instantiate=args.instantiate,
                                basedir=args.source_dir,
                                props_only=args.props_only,
-                               driver_ref=args.driver_ref)
+                               driver_ref=args.driver_ref,
+                               parent_first=args.parent_first)
 
 
 if __name__ == '__main__':
