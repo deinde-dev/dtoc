@@ -8,6 +8,17 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Added
+~~~~~
+- A ``--props-only`` option, which generates data only for a driver which
+  uses the ``dev_prop_...()`` helpers. Any other node has a record with no
+  data and its driver is found from its compatible strings.
+
+Changed
+~~~~~~~
+- A phandle is only parsed if its property is output, so a property which
+  the driver does not read may refer to a node which is not present.
+
 0.5.5 - 2026-11-15
 ------------------
 

@@ -306,6 +306,7 @@ class Scanner:
         self._warnings = collections.defaultdict(set)
         self._of_match = {}
         self._compat_to_driver = {}
+        self.props_only = False
         self._uclass = {}
         self._structs = {}
         self._phase = phase
@@ -354,7 +355,7 @@ class Scanner:
                 # A driver using the dev_prop_...() helpers can also be found
                 # from its compatible strings, so it needs no aliases
                 driver = self._compat_to_driver.get(compats[idx])
-                if driver and driver.dev_props:
+                if driver and (driver.dev_props or self.props_only):
                     compat_c = driver.name
             if not compat_c:
                 continue

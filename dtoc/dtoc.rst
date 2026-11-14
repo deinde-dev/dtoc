@@ -125,6 +125,14 @@ Options
     Instantiate the devices and uclasses, for ``OF_PLATDATA_INST``, rather
     than writing the platform data for U-Boot to bind at run time.
 
+``--props-only``
+    Generate data only for a driver which reads its properties with U-Boot's
+    ``dev_prop_...()`` helpers. Any other node has a record with no data,
+    since nothing reads it, and its driver is found from the compatible
+    strings in the driver's ``of_match`` table, so that ``DM_DRIVER_ALIAS()``
+    is not needed. Without this option, such a node has a struct holding all
+    of its properties.
+
 ``-c``, ``--c-output-dir``
     The directory for the C files.
 
