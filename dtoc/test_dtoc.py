@@ -211,8 +211,15 @@ static int test_dev_prop_of_to_plat(struct udevice *dev)
 					"max-frequency", 1000);
 	plat->fixed = dev_prop_bool(dev, dt, non_removable, "non-removable");
 	ret = dev_prop_clk(dev, dt, clocks, "clocks", 0, &plat->clk);
+	plat->label = dev_prop_string(dev, dt, label, "label");
+	ret = dev_prop_dev(dev, dt, partner, "partner", UCLASS_GPIO, &partner);
+	ret = dev_prop_gpio(dev, dt, test_gpios, "test-gpios", 0, &desc, 0);
 
 	/* No node has these */
+	str = dev_prop_string(dev, dt, absent_string, "absent-string");
+	ret = dev_prop_dev(dev, dt, absent_dev, "absent-dev", UCLASS_GPIO, &dev);
+	ret = dev_prop_gpio(dev, dt, absent_gpios, "absent-gpios", 0, &desc, 0);
+	ret = dev_prop_irq(dev, dt, absent_irqs, "absent-irqs", 0, &irq);
 	plat->val = dev_prop_u32_default(dev, dt, absent_u32, "absent-u32", 1);
 	plat->flag = dev_prop_bool(dev, dt, absent_bool, "absent-bool");
 	ret = dev_prop_clk(dev, dt, absent_clocks, "absent-clocks", 0, &clk);
@@ -279,32 +286,46 @@ U_BOOT_DRIVER(test_dev_prop) = {
 \tfdt32_t\t\tabsent_array[1];
 \tbool\t\tabsent_bool;
 \tstruct phandle_1_arg absent_clocks[1];
+\tstruct phandle_0_arg absent_dev[1];
+\tstruct phandle_2_arg absent_gpios[1];
 \tstruct phandle_1_arg absent_id[1];
+\tstruct phandle_2_arg absent_irqs[1];
 \tfdt32_t\t\tabsent_ptr[1];
 \tfdt32_t\t\t*absent_rw;
 \tunsigned int\tabsent_rw_count;
 \tfdt32_t\t\tabsent_size[1];
+\tconst char *\tabsent_string;
 \tfdt32_t\t\tabsent_u32;
 \tfdt32_t\t\tabsent_val;
 \tstruct phandle_1_arg clocks[1];
 \tulong\t\tdriver_data;
+\tconst char *\tlabel;
 \tfdt32_t\t\tmax_frequency;
 \tbool\t\tnon_removable;
+\tstruct phandle_0_arg partner[1];
 \tfdt32_t\t\treg[2];
 \tfdt32_t\t\t*rw_array;
 \tunsigned int\trw_array_count;
+\tstruct phandle_2_arg test_gpios[1];
 \tstruct {
 \t\tunsigned int absent_array:1;
 \t\tunsigned int absent_clocks:1;
+\t\tunsigned int absent_dev:1;
+\t\tunsigned int absent_gpios:1;
 \t\tunsigned int absent_id:1;
+\t\tunsigned int absent_irqs:1;
 \t\tunsigned int absent_ptr:1;
 \t\tunsigned int absent_rw:1;
 \t\tunsigned int absent_size:1;
+\t\tunsigned int absent_string:1;
 \t\tunsigned int absent_u32:1;
 \t\tunsigned int absent_val:1;
 \t\tunsigned int clocks:1;
+\t\tunsigned int label:1;
 \t\tunsigned int max_frequency:1;
+\t\tunsigned int partner:1;
 \t\tunsigned int rw_array:1;
+\t\tunsigned int test_gpios:1;
 \t} has;
 };
 ''', data)
@@ -330,15 +351,23 @@ extern fdt32_t dtv_dev_prop_a_rw_array[9];
 static const struct dtd_drv_test_dev_prop dtv_dev_prop_a = {
 \t.clocks\t\t\t= {
 \t\t\t{0, {3}},},
+\t.label\t\t\t= "hello",
 \t.max_frequency\t\t= 0x2faf080,
+\t.partner\t\t= {
+\t\t\t{2, {}},},
 \t.reg\t\t\t= {0x1000, 0x10},
 \t.rw_array\t\t= dtv_dev_prop_a_rw_array,
 \t.rw_array_count\t\t= 9,
+\t.test_gpios\t\t= {
+\t\t\t{2, {2, 1}},},
 \t.driver_data\t= TEST_DATA_A,
 \t.has = {
 \t\t.clocks = 1,
+\t\t.label = 1,
 \t\t.max_frequency = 1,
+\t\t.partner = 1,
 \t\t.rw_array = 1,
+\t\t.test_gpios = 1,
 \t},
 };
 #define DTPLAT_GET_test_dev_prop(_dev)\tDTPLAT_SINGLE(_dev, dtv_dev_prop_a, 1)
@@ -387,16 +416,24 @@ U_BOOT_DRVINFO(dev_prop_a) = {
 static const struct dtd_drv_test_dev_prop dtv_dev_prop_a = {
 \t.clocks\t\t\t= {
 \t\t\t{0, {3}},},
+\t.label\t\t\t= "hello",
 \t.max_frequency\t\t= 0x2faf080,
 \t.non_removable\t\t= true,
+\t.partner\t\t= {
+\t\t\t{3, {}},},
 \t.reg\t\t\t= {0x1000, 0x10},
 \t.rw_array\t\t= dtv_dev_prop_a_rw_array,
 \t.rw_array_count\t\t= 9,
+\t.test_gpios\t\t= {
+\t\t\t{3, {2, 1}},},
 \t.driver_data\t= TEST_DATA_A,
 \t.has = {
 \t\t.clocks = 1,
+\t\t.label = 1,
 \t\t.max_frequency = 1,
+\t\t.partner = 1,
 \t\t.rw_array = 1,
+\t\t.test_gpios = 1,
 \t},
 };
 U_BOOT_DRVINFO(dev_prop_a) = {
@@ -440,20 +477,27 @@ U_BOOT_DRVINFO(dev_prop_b) = {
 \tfdt32_t\t\tabsent_array[1];
 \tbool\t\tabsent_bool;
 \tstruct phandle_1_arg absent_clocks[1];
+\tstruct phandle_0_arg absent_dev[1];
+\tstruct phandle_2_arg absent_gpios[1];
 \tstruct phandle_1_arg absent_id[1];
+\tstruct phandle_2_arg absent_irqs[1];
 \tfdt32_t\t\tabsent_ptr[1];
 \tfdt32_t\t\t*absent_rw;
 \tunsigned int\tabsent_rw_count;
 \tfdt32_t\t\tabsent_size[1];
+\tconst char *\tabsent_string;
 \tfdt32_t\t\tabsent_u32;
 \tfdt32_t\t\tabsent_val;
 \tstruct phandle_1_arg clocks[1];
 \tulong\t\tdriver_data;
+\tconst char *\tlabel;
 \tfdt32_t\t\tmax_frequency;
 \tbool\t\tnon_removable;
+\tstruct phandle_0_arg partner[1];
 \tfdt_addr_t\treg[2];
 \tfdt32_t\t\t*rw_array;
 \tunsigned int\trw_array_count;
+\tstruct phandle_2_arg test_gpios[1];
 ''', data)
 
         data = self.run_dev_prop('prop', 'dtoc_test_simple.dts')

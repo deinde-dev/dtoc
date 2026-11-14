@@ -17,6 +17,13 @@
 		#clock-cells = <1>;
 	};
 
+	gpio: gpio {
+		bootph-all;
+		compatible = "sandbox,gpio";
+		gpio-controller;
+		#gpio-cells = <2>;
+	};
+
 	dev_prop-a {
 		bootph-all;
 		compatible = "test,dev_prop";
@@ -25,6 +32,9 @@
 		rw-array = <1 2 3 4 5 6 7 8 9>;
 		non-removable;
 		clocks = <&clk 3>;
+		label = "hello";
+		partner = <&gpio>;
+		test-gpios = <&gpio 2 1>;
 		unused-prop = <3>;
 	};
 
