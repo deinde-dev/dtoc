@@ -19,4 +19,9 @@
 		/* This refers to a node which is not in this phase */
 		clocks = <99 1>;
 	};
+
+	unknown {
+		bootph-all;
+		compatible = "vendor,no-such-driver";
+	};
 };
