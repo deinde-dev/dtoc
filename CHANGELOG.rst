@@ -18,6 +18,9 @@ Added
 - A ``--props-only`` option, which generates data only for a driver which
   uses the ``dev_prop_...()`` helpers. Any other node has a record with no
   data and its driver is found from its compatible strings.
+- A ``--driver-ref`` option, which refers to each node's driver with
+  ``DM_DRVINFO_DRIVER()`` instead of by name, so that U-Boot need not look
+  the driver up at run time.
 
 Changed
 ~~~~~~~

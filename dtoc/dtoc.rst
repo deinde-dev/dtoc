@@ -133,6 +133,14 @@ Options
     is not needed. Without this option, such a node has a struct holding all
     of its properties.
 
+``--driver-ref``
+    Refer to each node's driver with ``DM_DRVINFO_DRIVER(name)`` in its
+    ``U_BOOT_DRVINFO()`` record, instead of giving the driver's name as a
+    string, and declare each driver. U-Boot defines the macro to produce a
+    pointer to the driver, or NULL if the driver is not in the build. A node
+    with no driver in the source tree has no reference. This needs
+    ``--props-only``.
+
 ``-c``, ``--c-output-dir``
     The directory for the C files.
 

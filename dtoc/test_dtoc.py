@@ -258,7 +258,7 @@ U_BOOT_DRIVER(test_dev_prop) = {
 """
 
     def run_dev_prop(self, cmd, dts='dtoc_test_dev_prop.dts', instantiate=False,
-                     props_only=False):
+                     props_only=False, driver_ref=False):
         """Run dtoc with the dev_prop test driver
 
         Args:
@@ -280,7 +280,7 @@ U_BOOT_DRIVER(test_dev_prop) = {
         scan._drivers['test_dev_prop'].uclass = scan._uclass['UCLASS_MISC']
         dtb_platdata.run_steps([cmd], dtb_file, False, output, [], None,
                                instantiate, warning_disabled=True, scan=scan,
-                               props_only=props_only)
+                               props_only=props_only, driver_ref=driver_ref)
         return tools.read_file(output, binary=False)
 
     def test_props_only(self):
@@ -321,12 +321,13 @@ U_BOOT_DRIVER(test_plain) = {
 };
 """
 
-    def run_plain(self, props_only):
+    def run_plain(self, props_only, driver_ref=False):
         """Run dtoc with a driver which reads no properties
 
         Args:
             props_only (bool): True to generate data only for a driver which
                 uses the dev_prop helpers
+            driver_ref (bool): True to refer to each driver directly
 
         Returns:
             str: Contents of dt-plat.c
@@ -338,8 +339,40 @@ U_BOOT_DRIVER(test_plain) = {
         scan._drivers['test_plain'].uclass = scan._uclass['UCLASS_MISC']
         dtb_platdata.run_steps(['platdata'], dtb_file, False, output, [],
                                None, False, warning_disabled=True, scan=scan,
-                               props_only=props_only)
+                               props_only=props_only, driver_ref=driver_ref)
         return tools.read_file(output, binary=False)
+
+    def test_driver_ref(self):
+        """Test referring to each driver directly, instead of by name"""
+        data = self.run_plain(True, True)
+        self.assertIn('''/* Drivers which the records below refer to */
+extern U_BOOT_DRIVER(test_plain);
+
+''', data)
+        self.assertIn('''U_BOOT_DRVINFO(plain) = {
+\tDM_DRVINFO_DRIVER(test_plain),
+\t.parent_idx\t= -1,
+};
+''', data)
+
+        # A node with no driver in the source tree has no reference
+        self.assertIn('''U_BOOT_DRVINFO(unknown) = {
+\t.parent_idx\t= -1,
+};
+''', data)
+
+        # A driver which uses the helpers still has its data
+        data = self.run_dev_prop('platdata', props_only=True, driver_ref=True)
+        self.assertIn('''U_BOOT_DRVINFO(dev_prop_a) = {
+\tDM_DRVINFO_DRIVER(test_dev_prop),
+\t.plat\t\t= &dtv_dev_prop_a,
+\t.parent_idx\t= -1,
+};
+''', data)
+
+        with self.assertRaises(ValueError) as exc:
+            self.run_plain(False, True)
+        self.assertIn('--driver-ref needs --props-only', str(exc.exception))
 
     def test_props_only_compat(self):
         """Test finding a driver which reads nothing from its compatibles"""
