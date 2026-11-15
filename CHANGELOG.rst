@@ -8,6 +8,9 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.5.5 - 2026-11-15
+------------------
+
 Added
 ~~~~~
 - Support for U-Boot's ``dev_prop_gpio()`` and ``dev_prop_irq()`` helpers,
