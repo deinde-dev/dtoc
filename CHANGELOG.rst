@@ -8,6 +8,9 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.6.0 - 2026-11-15
+------------------
+
 Added
 ~~~~~
 - A ``--props-only`` option, which generates data only for a driver which
