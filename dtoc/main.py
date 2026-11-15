@@ -92,6 +92,10 @@ def run_dtoc():
     parser.add_argument(
         '-i', '--instantiate', action='store_true', default=False,
         help='Instantiate devices to avoid needing device_bind()')
+    parser.add_argument(
+        '--driver-ref', action='store_true',
+        help='Refer to each driver directly instead of by name (needs '
+             '--props-only)')
     parser.add_argument('--include-disabled', action='store_true',
                       help='Include disabled nodes')
     parser.add_argument('-o', '--output', action='store',
@@ -132,7 +136,8 @@ def run_dtoc():
                                [args.c_output_dir, args.h_output_dir],
                                args.phase, instantiate=args.instantiate,
                                basedir=args.source_dir,
-                               props_only=args.props_only)
+                               props_only=args.props_only,
+                               driver_ref=args.driver_ref)
 
 
 if __name__ == '__main__':

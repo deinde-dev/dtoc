@@ -209,7 +209,7 @@ class DtbPlatdata():
             run-time
     """
     def __init__(self, scan, dtb_fname, include_disabled, instantiate=False,
-                 props_only=False):
+                 props_only=False, driver_ref=False):
         self._scan = scan
         self._fdt = None
         self._dtb_fname = dtb_fname
@@ -234,6 +234,8 @@ class DtbPlatdata():
         self._instantiate = instantiate
         # True to emit no data for a driver which has no dev_prop_...() calls
         self._props_only = props_only
+        # True to refer to each driver directly, instead of by name
+        self._driver_ref = driver_ref
 
     def setup_output_dirs(self, output_dirs):
         """Set up the output directories
@@ -827,7 +829,15 @@ class DtbPlatdata():
             node: Node to process
         """
         self.buf('U_BOOT_DRVINFO(%s) = {\n' % node.var_name)
-        if node.no_data:
+        if self._driver_ref:
+            # U-Boot checks whether the driver is in the build. A node with no
+            # driver in the source tree has no reference
+            if node.driver:
+                self.buf('\tDM_DRVINFO_DRIVER(%s),\n' % node.driver.name)
+            if node.dev_props and not node.dtplat_single:
+                self.buf('\t.plat\t\t= &%s%s,\n' %
+                         (VAL_PREFIX, node.var_name))
+        elif node.no_data:
             self.buf('\t.name\t\t= "%s",\n' %
                      (node.driver.name if node.driver else node.struct_name))
         elif node.dev_props:
@@ -1466,6 +1476,14 @@ class DtbPlatdata():
             self.out(' */\n')
             self.out('\n')
 
+            if self._driver_ref:
+                names = sorted({node.driver.name for node in self._valid_nodes
+                                if node.driver})
+                self.out('/* Drivers which the records below refer to */\n')
+                for name in names:
+                    self.out('extern U_BOOT_DRIVER(%s);\n' % name)
+                self.out('\n')
+
             for node in self._valid_nodes:
                 self.output_node_plat(node)
 
@@ -1540,7 +1558,8 @@ OUTPUT_FILES_INST = {
 
 def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
               instantiate, warning_disabled=False, drivers_additional=None,
-              basedir=None, scan=None, props_only=False):
+              basedir=None, scan=None, props_only=False,
+              driver_ref=False):
     """Run all the steps of the dtoc tool
 
     Args:
@@ -1582,9 +1601,11 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
         do_process = True
     else:
         do_process = False
+    if driver_ref and not props_only:
+        raise ValueError('--driver-ref needs --props-only')
     scan.props_only = props_only
     plat = DtbPlatdata(scan, dtb_file, include_disabled, instantiate,
-                       props_only)
+                       props_only, driver_ref)
     plat.scan_dtb()
     plat.scan_tree(add_root=instantiate)
     plat.prepare_nodes()
