@@ -141,6 +141,13 @@ Options
     with no driver in the source tree has no reference. This needs
     ``--props-only``.
 
+``--parent-first``
+    Name each ``U_BOOT_DRVINFO()`` record after the full path of its node,
+    instead of the node's name. U-Boot's linker lists are sorted by name, so a
+    record then comes after that of its parent, whose name is a prefix of its
+    own, and U-Boot can bind the devices in a single pass. Nodes at the top
+    level keep the same names.
+
 ``-c``, ``--c-output-dir``
     The directory for the C files.
 

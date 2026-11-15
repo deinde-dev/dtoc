@@ -21,6 +21,9 @@ Added
 - A ``--driver-ref`` option, which refers to each node's driver with
   ``DM_DRVINFO_DRIVER()`` instead of by name, so that U-Boot need not look
   the driver up at run time.
+- A ``--parent-first`` option, which names each device record after the
+  full path of its node, so that it sorts after its parent and U-Boot can
+  bind the devices in a single pass.
 
 Changed
 ~~~~~~~
