@@ -10,6 +10,26 @@ Unreleased
 
 Added
 ~~~~~
+- A ``--props-only`` option, which generates data only for a driver which
+  uses the ``dev_prop_...()`` helpers. Any other node has a record with no
+  data and its driver is found from its compatible strings.
+- A ``--driver-ref`` option, which refers to each node's driver with
+  ``DM_DRVINFO_DRIVER()`` instead of by name, so that U-Boot need not look
+  the driver up at run time.
+- A ``--parent-first`` option, which names each device record after the
+  full path of its node, so that it sorts after its parent and U-Boot can
+  bind the devices in a single pass.
+
+Changed
+~~~~~~~
+- A phandle is only parsed if its property is output, so a property which
+  the driver does not read may refer to a node which is not present.
+
+0.5.5 - 2026-11-15
+------------------
+
+Added
+~~~~~
 - Support for U-Boot's ``dev_prop_gpio()`` and ``dev_prop_irq()`` helpers,
   which read a phandle with up to two arguments.
 - Support for U-Boot's ``dev_prop_dev()`` helper, which reads a phandle with

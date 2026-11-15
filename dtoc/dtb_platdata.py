@@ -187,7 +187,7 @@ class DtbPlatdata():
         _valid_nodes_unsorted: A list of Node object with compatible strings,
             ordered by devicetree node order
         _valid_nodes: A list of Node object with compatible strings, ordered by
-            conv_name_to_c(node.name)
+            node_c_name()
         _include_disabled: true to include nodes marked status = "disabled"
         _outfile: The current output file (sys.stdout or a real file)
         _outfile_name: Final path the current output file will be renamed to,
@@ -208,7 +208,8 @@ class DtbPlatdata():
         _instantiate: Instantiate devices so they don't need to be bound at
             run-time
     """
-    def __init__(self, scan, dtb_fname, include_disabled, instantiate=False):
+    def __init__(self, scan, dtb_fname, include_disabled, instantiate=False,
+                 props_only=False, driver_ref=False, parent_first=False):
         self._scan = scan
         self._fdt = None
         self._dtb_fname = dtb_fname
@@ -231,6 +232,12 @@ class DtbPlatdata():
         self._basedir = None
         self._valid_uclasses = None
         self._instantiate = instantiate
+        # True to emit no data for a driver which has no dev_prop_...() calls
+        self._props_only = props_only
+        # True to refer to each driver directly, instead of by name
+        self._driver_ref = driver_ref
+        # True to name each node so that it sorts after its parent
+        self._parent_first = parent_first
 
     def setup_output_dirs(self, output_dirs):
         """Set up the output directories
@@ -458,8 +465,26 @@ class DtbPlatdata():
             valid_nodes.append(root)
         self.scan_node(root, valid_nodes)
         self._valid_nodes_unsorted = valid_nodes
-        self._valid_nodes = sorted(valid_nodes,
-                                   key=lambda x: conv_name_to_c(x.name))
+        self._valid_nodes = sorted(valid_nodes, key=self.node_c_name)
+
+    def node_c_name(self, node):
+        """Get the C name for a node, which also gives its place in the order
+
+        U-Boot's linker lists are sorted by name, so this decides the index
+        of each device record. Normally the name comes from the node name.
+        With parent_first it comes from the full path, which means that a
+        node sorts after its parent, since the parent's name is a prefix of
+        its own. This lets U-Boot bind the devices in a single pass
+
+        Args:
+            node (fdt.Node): Node to check
+
+        Returns:
+            str: C name for the node
+        """
+        if self._parent_first and node.parent:
+            return conv_name_to_c(node.path[1:].replace('/', '_'))
+        return conv_name_to_c(node.name)
 
     def prepare_nodes(self):
         """Add extra properties to the nodes we are using
@@ -488,7 +513,7 @@ class DtbPlatdata():
         for idx, node in enumerate(self._valid_nodes):
             node.idx = idx
             node.struct_name, _ = self._scan.get_normalized_compat_name(node)
-            node.var_name = conv_name_to_c(node.name)
+            node.var_name = self.node_c_name(node)
             node.child_devs = []
             node.child_refs = {}
             node.seq = -1
@@ -500,6 +525,7 @@ class DtbPlatdata():
             node.parent_driver = None
             node.dev_props = None
             node.dtplat_single = False
+            node.no_data = False
 
     @staticmethod
     def get_num_cells(node):
@@ -582,6 +608,8 @@ class DtbPlatdata():
         """
         structs = self._struct_data
         for node in self._valid_nodes:
+            if node.no_data:
+                continue
             fields = {}
 
             # Get a list of all the valid properties in this node.
@@ -603,6 +631,8 @@ class DtbPlatdata():
                 structs[node.struct_name] = fields
 
         for node in self._valid_nodes:
+            if node.no_data:
+                continue
             struct = structs[node.struct_name]
             for name, prop in self.node_props(node).items():
                 prop.Widen(struct[name])
@@ -620,9 +650,10 @@ class DtbPlatdata():
         """
         for node in self._valid_nodes:
             node.phandles = set()
-            for pname, prop in node.props.items():
-                if pname in PROP_IGNORE_LIST or pname[0] == '#':
-                    continue
+
+            # Only look at properties which are output, so that one which the
+            # driver does not read may refer to a node which is not present
+            for prop in self.node_props(node).values():
                 info = self.get_phandle_argc(prop, node.name)
                 if info:
                     # Process the list as pairs of (phandle, id)
@@ -818,7 +849,18 @@ class DtbPlatdata():
             node: Node to process
         """
         self.buf('U_BOOT_DRVINFO(%s) = {\n' % node.var_name)
-        if node.dev_props:
+        if self._driver_ref:
+            # U-Boot checks whether the driver is in the build. A node with no
+            # driver in the source tree has no reference
+            if node.driver:
+                self.buf('\tDM_DRVINFO_DRIVER(%s),\n' % node.driver.name)
+            if node.dev_props and not node.dtplat_single:
+                self.buf('\t.plat\t\t= &%s%s,\n' %
+                         (VAL_PREFIX, node.var_name))
+        elif node.no_data:
+            self.buf('\t.name\t\t= "%s",\n' %
+                     (node.driver.name if node.driver else node.struct_name))
+        elif node.dev_props:
             self.buf('\t.name\t\t= "%s",\n' % node.driver.name)
             if not node.dtplat_single:
                 self.buf('\t.plat\t\t= &%s%s,\n' %
@@ -1345,6 +1387,12 @@ class DtbPlatdata():
         for node in self._dtplat_single.values():
             node.dtplat_single = True
 
+        # Any other node has no data, since nothing reads it
+        if self._props_only:
+            for node in self._valid_nodes:
+                if not node.dev_props:
+                    node.no_data = True
+
     def node_props(self, node):
         """Get the properties of a node which go in its struct
 
@@ -1354,6 +1402,8 @@ class DtbPlatdata():
         Returns:
             dict: Properties, keyed by name
         """
+        if node.no_data:
+            return {}
         props = {name: prop for name, prop in node.props.items()
                  if name not in PROP_IGNORE_LIST and name[0] != '#'}
         if node.dev_props:
@@ -1382,7 +1432,9 @@ class DtbPlatdata():
             self.buf('/* %s */\n' % line1)
 
         self._output_rw_arrays(node, False)
-        if node.dtplat_single:
+        if node.no_data:
+            self.buf('/* The driver reads no properties */\n')
+        elif node.dtplat_single:
             self.buf('/* Data is in dt-prop.h */\n')
         else:
             self._output_values(node)
@@ -1443,6 +1495,14 @@ class DtbPlatdata():
             self.out(' * ---  %-20s %-s\n' % ('-' * 20, '-' * 20))
             self.out(' */\n')
             self.out('\n')
+
+            if self._driver_ref:
+                names = sorted({node.driver.name for node in self._valid_nodes
+                                if node.driver})
+                self.out('/* Drivers which the records below refer to */\n')
+                for name in names:
+                    self.out('extern U_BOOT_DRIVER(%s);\n' % name)
+                self.out('\n')
 
             for node in self._valid_nodes:
                 self.output_node_plat(node)
@@ -1518,7 +1578,8 @@ OUTPUT_FILES_INST = {
 
 def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
               instantiate, warning_disabled=False, drivers_additional=None,
-              basedir=None, scan=None):
+              basedir=None, scan=None, props_only=False,
+              driver_ref=False, parent_first=False):
     """Run all the steps of the dtoc tool
 
     Args:
@@ -1560,7 +1621,11 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
         do_process = True
     else:
         do_process = False
-    plat = DtbPlatdata(scan, dtb_file, include_disabled, instantiate)
+    if driver_ref and not props_only:
+        raise ValueError('--driver-ref needs --props-only')
+    scan.props_only = props_only
+    plat = DtbPlatdata(scan, dtb_file, include_disabled, instantiate,
+                       props_only, driver_ref, parent_first)
     plat.scan_dtb()
     plat.scan_tree(add_root=instantiate)
     plat.prepare_nodes()

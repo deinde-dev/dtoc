@@ -125,6 +125,29 @@ Options
     Instantiate the devices and uclasses, for ``OF_PLATDATA_INST``, rather
     than writing the platform data for U-Boot to bind at run time.
 
+``--props-only``
+    Generate data only for a driver which reads its properties with U-Boot's
+    ``dev_prop_...()`` helpers. Any other node has a record with no data,
+    since nothing reads it, and its driver is found from the compatible
+    strings in the driver's ``of_match`` table, so that ``DM_DRIVER_ALIAS()``
+    is not needed. Without this option, such a node has a struct holding all
+    of its properties.
+
+``--driver-ref``
+    Refer to each node's driver with ``DM_DRVINFO_DRIVER(name)`` in its
+    ``U_BOOT_DRVINFO()`` record, instead of giving the driver's name as a
+    string, and declare each driver. U-Boot defines the macro to produce a
+    pointer to the driver, or NULL if the driver is not in the build. A node
+    with no driver in the source tree has no reference. This needs
+    ``--props-only``.
+
+``--parent-first``
+    Name each ``U_BOOT_DRVINFO()`` record after the full path of its node,
+    instead of the node's name. U-Boot's linker lists are sorted by name, so a
+    record then comes after that of its parent, whose name is a prefix of its
+    own, and U-Boot can bind the devices in a single pass. Nodes at the top
+    level keep the same names.
+
 ``-c``, ``--c-output-dir``
     The directory for the C files.
 
