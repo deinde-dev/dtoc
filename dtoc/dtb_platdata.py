@@ -150,11 +150,26 @@ KIND_RW = 'u32_array_rw'
 # Kinds which read a single 32-bit integer
 KINDS_U32 = ('u32_default', 'u32')
 
-# Kinds which read a phandle and one argument from a 'clocks' property
-KINDS_CLK = ('clk', 'clk_id')
+# Kinds which read a phandle and its arguments, with the number of arguments
+# to allow for if no node has the property
+KINDS_PHANDLE = {
+    'clk': 1,
+    'clk_id': 1,
+    'gpio': 2,
+    'irq': 2,
+    'dev': 0,
+    }
+
+# Kind which reads a phandle with no arguments from any property, so the
+# property is not one of PHANDLE_PROPS
+KIND_DEV = 'dev'
+
+# Kinds which read a string
+KINDS_STRING = ('string',)
 
 # Kinds whose property may be absent, so the struct has a flag for it
-KINDS_OPTIONAL = KINDS_ARRAY + KINDS_U32 + KINDS_CLK
+KINDS_OPTIONAL = (KINDS_ARRAY + KINDS_U32 + tuple(KINDS_PHANDLE) +
+                  KINDS_STRING)
 
 
 class DtbPlatdata():
@@ -208,6 +223,9 @@ class DtbPlatdata():
         self._struct_data = collections.OrderedDict()
         # Driver for each struct generated for dev_prop_...() helpers
         self._dev_prop_drivers = {}
+        # Properties read with dev_prop_dev(), each holding phandles with no
+        # arguments
+        self._dev_phandle_props = set()
         # The node for each such driver which has just one, keyed by driver
         self._dtplat_single = {}
         self._basedir = None
@@ -359,7 +377,8 @@ class DtbPlatdata():
         for name, cprop in PHANDLE_PROPS.items():
             if prop.name.endswith(name):
                 cells_prop = cprop
-        if cells_prop:
+        is_dev = not cells_prop and prop.name in self._dev_phandle_props
+        if cells_prop or is_dev:
             if not isinstance(prop.value, list):
                 prop.value = [prop.value]
             val = prop.value
@@ -379,11 +398,14 @@ class DtbPlatdata():
                 if not target:
                     raise ValueError("Cannot parse '%s' in node '%s'" %
                                      (prop.name, node_name))
-                cells = target.props.get(cells_prop)
-                if not cells:
-                    raise ValueError("Node '%s' has no cells property" %
-                                     target.name)
-                num_args = fdt_util.fdt32_to_cpu(cells.value)
+                if is_dev:
+                    num_args = 0
+                else:
+                    cells = target.props.get(cells_prop)
+                    if not cells:
+                        raise ValueError("Node '%s' has no cells property" %
+                                         target.name)
+                    num_args = fdt_util.fdt32_to_cpu(cells.value)
                 max_args = max(max_args, num_args)
                 args.append(num_args)
                 i += 1 + num_args
@@ -716,8 +738,11 @@ class DtbPlatdata():
                          else None)
             elif kind == 'bool':
                 ptype, count = 'bool', None
-            elif kind in KINDS_CLK:
-                ptype, count = 'struct phandle_1_arg', 1
+            elif kind in KINDS_PHANDLE:
+                ptype = 'struct phandle_%d_arg' % KINDS_PHANDLE[kind]
+                count = 1
+            elif kind in KINDS_STRING:
+                ptype, count = 'const char *', None
             elif kind in KINDS_ARRAY:
                 ptype, count = 'fdt32_t', 1
             elif kind in KINDS_U32:
@@ -1298,6 +1323,9 @@ class DtbPlatdata():
         self._dev_prop_drivers = {'drv_' + driver.name: driver
                                 for driver in self._scan._drivers.values()
                                 if driver.dev_props}
+        self._dev_phandle_props = {
+            pname for driver in self._dev_prop_drivers.values()
+            for kind, pname in driver.dev_props.values() if kind == KIND_DEV}
         users = collections.defaultdict(list)
         for node in self._valid_nodes:
             driver = node.driver
