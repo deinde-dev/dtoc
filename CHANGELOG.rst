@@ -8,6 +8,9 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.7.0 - 2026-11-16
+------------------
+
 Added
 ~~~~~
 - A ``--stamp`` option, which updates a stamp file when dtoc is done and
