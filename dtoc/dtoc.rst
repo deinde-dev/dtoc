@@ -160,6 +160,19 @@ Options
     command. Without this or the output directories, dtoc writes to standard
     output.
 
+``--stamp``
+    A stamp file to update once the output is written, for use as the target
+    of the make rule which runs dtoc. The output depends on the drivers in the
+    source tree as well as on the devicetree, so dtoc also writes a list of
+    the files which it relied on to a file of the same name with ``.d`` added,
+    in a form which make can include. dtoc then runs again when one of them
+    changes. The list holds each source file which declares a driver or a
+    uclass driver, along with every Makefile, since a new source file only
+    matters once a Makefile builds it.
+
+    With this option, an output file whose content has not changed is left
+    alone, so that make does not rebuild everything which includes it.
+
 ``--include-disabled``
     Include nodes whose status is 'disabled'.
 

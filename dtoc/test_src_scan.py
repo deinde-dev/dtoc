@@ -118,6 +118,75 @@ class TestSrcScan(unittest.TestCase):
         # A directory given explicitly is used as is
         self.assertEqual('/my/tree', src_scan.Scanner('/my/tree', None)._basedir)
 
+    def test_headers(self):
+        """Test that the headers are only scanned when requested"""
+        with tempfile.TemporaryDirectory() as srcdir:
+            tools.write_file(os.path.join(srcdir, 'drv.h'),
+                             'struct drv_priv {\n\tint val;\n};\n',
+                             binary=False)
+            tools.write_file(os.path.join(srcdir, 'drv.c'), '''
+static const struct udevice_id drv_ids[] = {
+	{ .compatible = "vendor,drv" },
+	{ }
+};
+
+U_BOOT_DRIVER(drv) = {
+	.name	= "drv",
+	.id	= UCLASS_MISC,
+	.of_match = drv_ids,
+};
+''', binary=False)
+            scan = src_scan.Scanner(srcdir, None)
+            scan.scan_drivers(headers=False)
+            self.assertIn('drv', scan._drivers)
+            self.assertEqual({}, scan._structs)
+
+            scan = src_scan.Scanner(srcdir, None)
+            scan.scan_drivers()
+            self.assertIn('drv', scan._drivers)
+            self.assertIn('drv_priv', scan._structs)
+
+    def test_deps(self):
+        """Test collecting the files which the scan depends on"""
+        with tempfile.TemporaryDirectory() as srcdir:
+            os.mkdir(os.path.join(srcdir, 'sub'))
+            for fname, data in (
+                    ('Makefile', 'obj-y += drv.o other.o sub/\n'),
+                    ('sub/Makefile', 'obj-y += uc.o\n'),
+                    ('drv.h', 'struct drv_priv {\n\tint val;\n};\n'),
+                    ('other.c', 'int other;\n'),
+                    ('drv.c', '''
+static const struct udevice_id drv_ids[] = {
+	{ .compatible = "vendor,drv" },
+	{ }
+};
+
+U_BOOT_DRIVER(drv) = {
+	.name	= "drv",
+	.id	= UCLASS_MISC,
+	.of_match = drv_ids,
+};
+'''),
+                    ('sub/uc.c', '''
+UCLASS_DRIVER(misc) = {
+	.id		= UCLASS_MISC,
+	.name		= "misc",
+};
+''')):
+                tools.write_file(os.path.join(srcdir, fname), data,
+                                 binary=False)
+            scan = src_scan.Scanner(srcdir, None)
+            self.assertEqual([], scan.get_deps())
+            scan.scan_drivers()
+
+            # A file with no driver cannot affect the output, and nor can a
+            # header
+            self.assertEqual(
+                [os.path.join(srcdir, fname)
+                 for fname in ('Makefile', 'drv.c', 'sub/Makefile',
+                               'sub/uc.c')],
+                scan.get_deps())
+
     def test_additional(self):
         """Test with additional drivers to scan"""
         scan = src_scan.Scanner(
