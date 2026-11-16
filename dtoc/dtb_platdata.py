@@ -1617,7 +1617,9 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
 
     if not scan:
         scan = src_scan.Scanner(basedir, drivers_additional, phase)
-        scan.scan_drivers()
+
+        # Only the private data of an instantiated device needs the headers
+        scan.scan_drivers(headers=instantiate)
         do_process = True
     else:
         do_process = False

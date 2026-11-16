@@ -118,6 +118,34 @@ class TestSrcScan(unittest.TestCase):
         # A directory given explicitly is used as is
         self.assertEqual('/my/tree', src_scan.Scanner('/my/tree', None)._basedir)
 
+    def test_headers(self):
+        """Test that the headers are only scanned when requested"""
+        with tempfile.TemporaryDirectory() as srcdir:
+            tools.write_file(os.path.join(srcdir, 'drv.h'),
+                             'struct drv_priv {\n\tint val;\n};\n',
+                             binary=False)
+            tools.write_file(os.path.join(srcdir, 'drv.c'), '''
+static const struct udevice_id drv_ids[] = {
+	{ .compatible = "vendor,drv" },
+	{ }
+};
+
+U_BOOT_DRIVER(drv) = {
+	.name	= "drv",
+	.id	= UCLASS_MISC,
+	.of_match = drv_ids,
+};
+''', binary=False)
+            scan = src_scan.Scanner(srcdir, None)
+            scan.scan_drivers(headers=False)
+            self.assertIn('drv', scan._drivers)
+            self.assertEqual({}, scan._structs)
+
+            scan = src_scan.Scanner(srcdir, None)
+            scan.scan_drivers()
+            self.assertIn('drv', scan._drivers)
+            self.assertIn('drv_priv', scan._structs)
+
     def test_additional(self):
         """Test with additional drivers to scan"""
         scan = src_scan.Scanner(

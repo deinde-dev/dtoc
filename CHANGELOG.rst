@@ -8,6 +8,12 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Changed
+~~~~~~~
+- The header files are only scanned when ``--instantiate`` is used, since
+  nothing else needs the struct definitions. This makes a normal run about
+  25% faster.
+
 0.6.0 - 2026-11-15
 ------------------
 

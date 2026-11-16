@@ -758,10 +758,15 @@ class Scanner:
             if 'struct' in buff:
                 self._parse_structs(fname, buff)
 
-    def scan_drivers(self):
+    def scan_drivers(self, headers=True):
         """Scan the driver folders to build a list of driver names and aliases
 
         This procedure will populate self._drivers and self._driver_aliases
+
+        Args:
+            headers (bool): True to scan the header files for struct
+                definitions too. Only instantiating devices needs these, and
+                reading every header takes a while
         """
         for (dirpath, _, filenames) in os.walk(self._basedir):
             rel_path = dirpath[len(self._basedir):]
@@ -773,7 +778,7 @@ class Scanner:
                 pathname = dirpath + '/' + fname
                 if fname.endswith('.c'):
                     self.scan_driver(pathname)
-                elif fname.endswith('.h'):
+                elif headers and fname.endswith('.h'):
                     self.scan_header(pathname)
         for fname in self._drivers_additional:
             if not isinstance(fname, str) or len(fname) == 0:
