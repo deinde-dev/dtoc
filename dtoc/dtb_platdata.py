@@ -16,6 +16,7 @@ See U-Boot's doc/develop/driver-model/of-plat.rst for more information
 import collections
 import copy
 from enum import IntEnum
+import filecmp
 import os
 import re
 import sys
@@ -207,9 +208,12 @@ class DtbPlatdata():
             the selected devices (see _valid_node), in alphabetical order
         _instantiate: Instantiate devices so they don't need to be bound at
             run-time
+        _keep_unchanged: True to leave an output file alone if its content
+            has not changed, so that it keeps its timestamp
     """
     def __init__(self, scan, dtb_fname, include_disabled, instantiate=False,
-                 props_only=False, driver_ref=False, parent_first=False):
+                 props_only=False, driver_ref=False, parent_first=False,
+                 keep_unchanged=False):
         self._scan = scan
         self._fdt = None
         self._dtb_fname = dtb_fname
@@ -238,6 +242,7 @@ class DtbPlatdata():
         self._driver_ref = driver_ref
         # True to name each node so that it sorts after its parent
         self._parent_first = parent_first
+        self._keep_unchanged = keep_unchanged
 
     def setup_output_dirs(self, output_dirs):
         """Set up the output directories
@@ -313,15 +318,51 @@ class DtbPlatdata():
 
         This closes the output file, if one is in use, and renames the
         temporary file into place so the result appears atomically.
+
+        With _keep_unchanged, a file whose content has not changed is left
+        alone, so that make does not rebuild everything which depends on it.
         """
         if self._outfile is None or self._outfile == sys.stdout:
             return
         self._outfile.close()
         self._outfile = None
         if self._outfile_tmp:
-            os.replace(self._outfile_tmp, self._outfile_name)
+            if (self._keep_unchanged and
+                    os.path.exists(self._outfile_name) and
+                    filecmp.cmp(self._outfile_tmp, self._outfile_name,
+                                shallow=False)):
+                os.remove(self._outfile_tmp)
+            else:
+                os.replace(self._outfile_tmp, self._outfile_name)
             self._outfile_tmp = None
             self._outfile_name = None
+
+    def write_stamp(self, fname):
+        """Write a stamp file, along with a list of the source files used
+
+        The output depends on the drivers in the source tree as well as on
+        the devicetree. This writes a make-format list of the files which
+        the scan depends on, to <fname>.d, with the stamp file as the
+        target. The build can include this, so that it runs dtoc again when
+        one of them changes. Each file also has an empty rule, so that make
+        does not stop if one is later removed.
+
+        The stamp file is then updated, so that it is newer than the files
+        listed, even where no output file needed to change.
+
+        Args:
+            fname (str): Filename of the stamp file
+        """
+        deps = [dep.replace(' ', '\\ ') for dep in self._scan.get_deps()]
+        with open(fname + '.d', 'w', encoding='utf-8') as outf:
+            outf.write('%s:' % fname.replace(' ', '\\ '))
+            for dep in deps:
+                outf.write(' \\\n  %s' % dep)
+            outf.write('\n\n')
+            for dep in deps:
+                outf.write('%s:\n' % dep)
+        with open(fname, 'w', encoding='utf-8'):
+            pass
 
     def out(self, line):
         """Output a string to the output file
@@ -1579,7 +1620,7 @@ OUTPUT_FILES_INST = {
 def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
               instantiate, warning_disabled=False, drivers_additional=None,
               basedir=None, scan=None, props_only=False,
-              driver_ref=False, parent_first=False):
+              driver_ref=False, parent_first=False, stamp=None):
     """Run all the steps of the dtoc tool
 
     Args:
@@ -1603,6 +1644,10 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
             the current directory
         scan (src_src.Scanner): Scanner from a previous run. This can help speed
             up tests. Use None for normal operation
+        stamp (str): Filename of a stamp file to update when done, or None.
+            With this, a list of the source files used is written to
+            <stamp>.d and any output file whose content has not changed is
+            left alone
 
     Returns:
         DtbPlatdata object
@@ -1627,7 +1672,8 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
         raise ValueError('--driver-ref needs --props-only')
     scan.props_only = props_only
     plat = DtbPlatdata(scan, dtb_file, include_disabled, instantiate,
-                       props_only, driver_ref, parent_first)
+                       props_only, driver_ref, parent_first,
+                       keep_unchanged=bool(stamp))
     plat.scan_dtb()
     plat.scan_tree(add_root=instantiate)
     plat.prepare_nodes()
@@ -1660,6 +1706,8 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
         plat.out_header(outfile)
         outfile.method(plat)
     plat.finish_output()
+    if stamp:
+        plat.write_stamp(stamp)
 
     if not warning_disabled:
         scan.show_warnings()

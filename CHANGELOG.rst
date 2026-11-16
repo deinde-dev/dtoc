@@ -8,6 +8,13 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Added
+~~~~~
+- A ``--stamp`` option, which updates a stamp file when dtoc is done and
+  writes a list of the source files it relied on, for make to include, so
+  that the build runs dtoc again when a driver changes. With it, an output
+  file whose content has not changed is left alone.
+
 Changed
 ~~~~~~~
 - The header files are only scanned when ``--instantiate`` is used, since

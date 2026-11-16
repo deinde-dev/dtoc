@@ -116,6 +116,11 @@ def run_dtoc():
         '-s', '--source-dir', type=str,
         help='U-Boot source directory to scan for drivers (defaults to '
              '$srctree, else the current directory)')
+    parser.add_argument(
+        '--stamp', type=str,
+        help='Stamp file to update when done. A list of the source files '
+             'used is written to <stamp>.d for make to include, and an '
+             'output file whose content has not changed is left alone')
     if HAVE_TESTS:
         parser.add_argument('-t', '--test', action='store_true', dest='test',
                             default=False, help='run tests')
@@ -141,7 +146,8 @@ def run_dtoc():
                                basedir=args.source_dir,
                                props_only=args.props_only,
                                driver_ref=args.driver_ref,
-                               parent_first=args.parent_first)
+                               parent_first=args.parent_first,
+                               stamp=args.stamp)
 
 
 if __name__ == '__main__':

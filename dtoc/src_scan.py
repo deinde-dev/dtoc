@@ -292,6 +292,10 @@ class Scanner:
             value: Struct object
         _phase: The phase of U-Boot that we are generating data for, e.g. 'spl'
              or 'tpl'. None if not known
+        _deps: Set of files which the scan results depend on (each a str).
+            These are the source files which declare a driver or uclass
+            driver, and the Makefiles, since a new driver file only matters
+            once a Makefile builds it
     """
     def __init__(self, basedir, drivers_additional, phase=''):
         """Set up a new Scanner
@@ -310,6 +314,7 @@ class Scanner:
         self._uclass = {}
         self._structs = {}
         self._phase = phase
+        self._deps = set()
 
     def get_driver(self, name):
         """Get a driver given its name
@@ -732,8 +737,10 @@ class Scanner:
             # obtain driver information
             if 'U_BOOT_DRIVER' in buff:
                 self._parse_driver(fname, buff)
+                self._deps.add(fname)
             if 'UCLASS_DRIVER' in buff:
                 self._parse_uclass_driver(fname, buff)
+                self._deps.add(fname)
 
     def scan_header(self, fname):
         """Scan a header file to build a list of struct definitions
@@ -780,6 +787,8 @@ class Scanner:
                     self.scan_driver(pathname)
                 elif headers and fname.endswith('.h'):
                     self.scan_header(pathname)
+                elif fname == 'Makefile':
+                    self._deps.add(pathname)
         for fname in self._drivers_additional:
             if not isinstance(fname, str) or len(fname) == 0:
                 continue
@@ -793,6 +802,19 @@ class Scanner:
         # mark_used()?
         for driver in self._drivers.values():
             driver.uclass = self._uclass.get(driver.uclass_id)
+
+    def get_deps(self):
+        """Get the files which the results of the scan depend on
+
+        These are the source files which declare a driver or a uclass driver,
+        along with every Makefile. A new source file can only affect the
+        output once a Makefile builds it, so this covers that case without
+        the need to watch each directory.
+
+        Returns:
+            list of str: Sorted list of filenames
+        """
+        return sorted(self._deps)
 
     def mark_used(self, nodes):
         """Mark the drivers associated with a list of nodes as 'used'

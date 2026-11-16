@@ -2097,6 +2097,71 @@ U_BOOT_DRVINFO(spl_test2) = {
              'dt-decl.h', 'dt-prop.h'},
             leafs)
 
+    def test_stamp(self):
+        """Test updating a stamp file and leaving unchanged output alone"""
+        dtb_file = get_dtb_file('dtoc_test_simple.dts')
+        scan = copy_scan()
+        with tempfile.TemporaryDirectory() as outdir:
+            stamp = os.path.join(outdir, 'dtoc.stamp')
+            outputs = [os.path.join(outdir, fname)
+                       for fname in ('dt-plat.c', 'dt-structs-gen.h')]
+
+            def run_dtoc():
+                dtb_platdata.run_steps(
+                    ['all'], dtb_file, False, None, [outdir], None, False,
+                    warning_disabled=True, scan=copy.deepcopy(scan),
+                    stamp=stamp)
+
+            run_dtoc()
+            self.assertEqual(0, os.path.getsize(stamp))
+            orig = [tools.read_file(fname) for fname in outputs]
+
+            # The stamp file is the target, with each source file as a
+            # prerequisite and also with an empty rule of its own
+            deps = scan.get_deps()
+            self.assertTrue(deps)
+            lines = tools.read_file(stamp + '.d', binary=False).splitlines()
+            self.assertEqual('%s: \\' % stamp, lines[0])
+            self.assertEqual(
+                ['  %s \\' % dep for dep in deps[:-1]] + ['  ' + deps[-1]],
+                lines[1:len(deps) + 1])
+            self.assertEqual('', lines[len(deps) + 1])
+            self.assertEqual(['%s:' % dep for dep in deps],
+                             lines[len(deps) + 2:])
+
+            # Running again leaves the output alone, but updates the stamp
+            for fname in outputs + [stamp]:
+                os.utime(fname, (1000, 1000))
+            run_dtoc()
+            for fname in outputs:
+                self.assertEqual(1000, os.path.getmtime(fname))
+            self.assertLess(1000, os.path.getmtime(stamp))
+
+            # A file whose content is different is replaced
+            tools.write_file(outputs[0], b'old')
+            for fname in outputs:
+                os.utime(fname, (1000, 1000))
+            run_dtoc()
+            self.assertLess(1000, os.path.getmtime(outputs[0]))
+            self.assertEqual(1000, os.path.getmtime(outputs[1]))
+            self.assertEqual(orig,
+                             [tools.read_file(fname) for fname in outputs])
+            self.assertFalse(glob.glob(outdir + '/*.tmp'))
+
+    def test_stamp_spaces(self):
+        """Test that a space in a filename is escaped in the list of files"""
+        scan = src_scan.Scanner(None, None)
+        scan._deps = {'my dir/drv.c', 'Makefile'}
+        plat = dtb_platdata.DtbPlatdata(scan, 'x.dtb', False)
+        with tempfile.TemporaryDirectory() as outdir:
+            stamp = os.path.join(outdir, 'my stamp')
+            plat.write_stamp(stamp)
+            self.assertEqual(
+                '%s: \\\n  Makefile \\\n  my\\ dir/drv.c\n\n'
+                'Makefile:\nmy\\ dir/drv.c:\n' %
+                stamp.replace(' ', '\\ '),
+                tools.read_file(stamp + '.d', binary=False))
+
     def test_output_dirs_inst(self):
         """Test outputting files to a directory with instantiation"""
         fnames = self.check_output_dirs(True)
