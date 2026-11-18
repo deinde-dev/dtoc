@@ -8,6 +8,9 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.8.0 - 2026-11-17
+------------------
+
 Added
 ~~~~~
 - An ``--alias-seq`` option, which gives the alias number of each node in
