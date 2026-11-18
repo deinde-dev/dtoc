@@ -8,6 +8,9 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+0.9.0 - 2026-11-17
+------------------
+
 Added
 ~~~~~
 - Pin settings for each device, in ``dt-plat.c``, where the driver for its
