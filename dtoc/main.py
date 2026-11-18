@@ -80,6 +80,9 @@ def run_dtoc():
               'https://dtoc.readthedocs.io/ for details')
 
     parser = ArgumentParser(epilog=epilog)
+    parser.add_argument(
+        '--alias-seq', action='store_true',
+        help='Record the sequence number of each device which has an alias')
     parser.add_argument('-B', '--build-dir', type=str, default='b',
             help='Directory containing the build output')
     parser.add_argument('-c', '--c-output-dir', action='store',
@@ -147,6 +150,7 @@ def run_dtoc():
                                props_only=args.props_only,
                                driver_ref=args.driver_ref,
                                parent_first=args.parent_first,
+                               alias_seq=args.alias_seq,
                                stamp=args.stamp)
 
 
