@@ -2292,6 +2292,56 @@ U_BOOT_DRVINFO(spl_test2) = {
         # Try adding an alias for a missing node
         self.assertIsNone(scan.add_uclass_alias('testfdt', 3, None))
 
+    def test_alias_seq(self):
+        """Test recording the alias number of each device"""
+        dtb_file = get_dtb_file('dtoc_test_inst.dts')
+        output = tools.get_output_filename('output')
+
+        # Without the option there is no sequence number
+        dtb_platdata.run_steps(['platdata'], dtb_file, False, output, [],
+                               None, False, warning_disabled=True,
+                               scan=copy_scan())
+        data = tools.read_file(output, binary=False)
+        self.assertNotIn('.seq', data)
+
+        dtb_platdata.run_steps(['platdata'], dtb_file, False, output, [],
+                               None, False, warning_disabled=True,
+                               scan=copy_scan(), alias_seq=True)
+        data = tools.read_file(output, binary=False)
+
+        # A node with an alias named after its uclass uses that number
+        self.assertIn('''U_BOOT_DRVINFO(i2c) = {
+\t.name\t\t= "sandbox_i2c",
+\t.plat\t\t= &dtv_i2c,
+\t.plat_size\t= sizeof(dtv_i2c),
+\t.parent_idx\t= -1,
+\t.seq\t\t= 4,
+};
+''', data)
+        self.assertIn('''\t.parent_idx\t= 1,
+\t.seq\t\t= 1,
+};
+''', data)
+
+        # A node with no alias has -1, even if its uclass has aliases
+        self.assertIn('''\t.plat_size\t= sizeof(dtv_test0),
+\t.parent_idx\t= 1,
+\t.seq\t\t= -1,
+};
+''', data)
+        self.assertEqual(3, data.count('.seq\t\t= -1,'))
+
+    def test_alias_seq_too_large(self):
+        """Test an alias number which does not fit in U-Boot's record"""
+        dtb_file = get_dtb_file('dtoc_test_alias_large.dts')
+        output = tools.get_output_filename('output')
+        with self.assertRaises(ValueError) as exc:
+            dtb_platdata.run_steps(['platdata'], dtb_file, False, output, [],
+                                   None, False, warning_disabled=True,
+                                   scan=copy_scan(), alias_seq=True)
+        self.assertIn("Alias number 128 for '/i2c' is too large (maximum 127)",
+                      str(exc.exception))
+
     def test_alias_read_bad(self):
         """Test invalid alias property name"""
         dtb_file = get_dtb_file('dtoc_test_alias_bad.dts')

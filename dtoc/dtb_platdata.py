@@ -53,6 +53,9 @@ TYPE_NAMES = {
 STRUCT_PREFIX = 'dtd_'
 VAL_PREFIX = 'dtv_'
 
+# Largest alias number which fits in the 'seq' member of U-Boot's driver_info
+MAX_ALIAS_SEQ = 127
+
 # Properties which are considered to be phandles
 #    key: property name
 #    value: name of associated #cells property in the target node
@@ -213,7 +216,7 @@ class DtbPlatdata():
     """
     def __init__(self, scan, dtb_fname, include_disabled, instantiate=False,
                  props_only=False, driver_ref=False, parent_first=False,
-                 keep_unchanged=False):
+                 keep_unchanged=False, alias_seq=False):
         self._scan = scan
         self._fdt = None
         self._dtb_fname = dtb_fname
@@ -242,6 +245,8 @@ class DtbPlatdata():
         self._driver_ref = driver_ref
         # True to name each node so that it sorts after its parent
         self._parent_first = parent_first
+        # True to record the alias number of each device which has an alias
+        self._alias_seq = alias_seq
         self._keep_unchanged = keep_unchanged
 
     def setup_output_dirs(self, output_dirs):
@@ -558,6 +563,7 @@ class DtbPlatdata():
             node.child_devs = []
             node.child_refs = {}
             node.seq = -1
+            node.alias_seq = -1
             node.dev_ref = None
             node.driver = None
             node.uclass = None
@@ -915,6 +921,8 @@ class DtbPlatdata():
         if node.parent and node.parent in self._valid_nodes:
             idx = node.parent.idx
         self.buf('\t.parent_idx\t= %d,\n' % idx)
+        if self._alias_seq:
+            self.buf('\t.seq\t\t= %d,\n' % node.alias_seq)
         self.buf('};\n')
         self.buf('\n')
 
@@ -1296,6 +1304,29 @@ class DtbPlatdata():
             elif result is False:
                 print("Could not find uclass for alias '%s'" % prop.name)
 
+    def read_alias_seqs(self):
+        """Record the alias number of each node which has one
+
+        A node has an alias if a property in /aliases points to it and the
+        property is named after the uclass of the node's driver, e.g. 'mmc1'
+        for a node whose driver is in UCLASS_MMC. Any other node gets -1
+
+        This must be called after read_aliases() and before assign_seqs(),
+        since the latter adds an entry for each node which has no alias
+
+        Raises:
+            ValueError: An alias number is too large for U-Boot's record
+        """
+        for node in self._valid_nodes_unsorted:
+            node.alias_seq = -1
+            if node.driver and node.uclass:
+                seq = node.uclass.alias_path_to_num.get(node.path, -1)
+                if seq > MAX_ALIAS_SEQ:
+                    raise ValueError(
+                        "Alias number %d for '%s' is too large (maximum %d)" %
+                        (seq, node.path, MAX_ALIAS_SEQ))
+                node.alias_seq = seq
+
     def generate_decl(self):
         nodes_to_output = list(self._valid_nodes)
 
@@ -1620,7 +1651,8 @@ OUTPUT_FILES_INST = {
 def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
               instantiate, warning_disabled=False, drivers_additional=None,
               basedir=None, scan=None, props_only=False,
-              driver_ref=False, parent_first=False, stamp=None):
+              driver_ref=False, parent_first=False, stamp=None,
+              alias_seq=False):
     """Run all the steps of the dtoc tool
 
     Args:
@@ -1648,6 +1680,8 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
             With this, a list of the source files used is written to
             <stamp>.d and any output file whose content has not changed is
             left alone
+        alias_seq (bool): True to record the alias number of each device
+            which has an alias
 
     Returns:
         DtbPlatdata object
@@ -1673,7 +1707,7 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
     scan.props_only = props_only
     plat = DtbPlatdata(scan, dtb_file, include_disabled, instantiate,
                        props_only, driver_ref, parent_first,
-                       keep_unchanged=bool(stamp))
+                       keep_unchanged=bool(stamp), alias_seq=alias_seq)
     plat.scan_dtb()
     plat.scan_tree(add_root=instantiate)
     plat.prepare_nodes()
@@ -1684,6 +1718,7 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
     plat.scan_structs()
     plat.scan_phandles()
     plat.read_aliases()
+    plat.read_alias_seqs()
     plat.assign_seqs()
 
     # Figure out what output files we plan to generate

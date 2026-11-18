@@ -148,6 +148,15 @@ Options
     own, and U-Boot can bind the devices in a single pass. Nodes at the top
     level keep the same names.
 
+``--alias-seq``
+    Give the alias number of each node in a ``seq`` member of its
+    ``U_BOOT_DRVINFO()`` record, or -1 if it has none. A node has an alias if
+    a property in ``/aliases`` points to it and the property is named after
+    the uclass of the node's driver, e.g. ``mmc1`` for an MMC controller.
+    U-Boot uses this as the sequence number of the device, as it does with a
+    devicetree, so that devices have the same numbers either way. The number
+    must not be more than 127.
+
 ``-c``, ``--c-output-dir``
     The directory for the C files.
 

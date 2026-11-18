@@ -8,6 +8,12 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Added
+~~~~~
+- An ``--alias-seq`` option, which gives the alias number of each node in
+  its device record, so that U-Boot can number devices from ``/aliases``
+  as it does with a devicetree.
+
 0.7.0 - 2026-11-16
 ------------------
 
