@@ -2309,6 +2309,243 @@ U_BOOT_DRVINFO(spl_test2) = {
         # Try adding an alias for a missing node
         self.assertIsNone(scan.add_uclass_alias('testfdt', 3, None))
 
+    PINCTRL_DRIVER = """
+static const struct udevice_id test_pinctrl_ids[] = {
+	{ .compatible = "test,pinctrl" },
+	{ }
+};
+
+U_BOOT_DRIVER(test_pinctrl) = {
+	.name	= "test_pinctrl",
+	.id	= UCLASS_PINCTRL,
+	.of_match = test_pinctrl_ids,
+	DM_PINS("test,pins", 3, 2)
+};
+"""
+
+    # Devicetree for the pin tests. The pins for the I2C bus and the body of
+    # a second pin controller are filled in by each test
+    PINS_DTS = '''/dts-v1/;
+
+/ {
+	i2c {
+		bootph-all;
+		compatible = "sandbox,i2c";
+		pinctrl-names = "default";
+		pinctrl-0 = <&i2c_pins %(extra)s &i2c_none>;
+	};
+
+	serial {
+		bootph-all;
+		compatible = "sandbox,serial";
+		pinctrl-0 = <&uart_pins>;
+	};
+
+	no-driver {
+		bootph-all;
+		compatible = "test,no-driver";
+		pinctrl-0 = <&uart_pins>;
+	};
+
+	spl-test {
+		bootph-all;
+		compatible = "sandbox,spl-test";
+		pinctrl-0 = <%(spl_pins)s>;
+	};
+
+	pinctrl {
+		bootph-all;
+		compatible = "test,pinctrl";
+
+		pull_up: pcfg-pull-up {
+			bias-pull-up;
+		};
+
+		drive: pcfg-drive {
+			bias-disable;
+			drive-strength = <%(strength)s>;
+			test,ignored;
+		};
+
+		i2c_pins: i2c-pins {
+			test,pins = <%(pins)s>;
+		};
+
+		i2c_extra: i2c-extra {
+			test,pins = <5 6 &pull_up>;
+		};
+
+		i2c_none: i2c-none {
+		};
+
+		uart {
+			uart_pins: xfer {
+				test,pins = <7 8 &drive>;
+			};
+		};
+	};
+
+	other {
+		other_pins: other-pins {
+			test,pins = <9 9 9>;
+		};
+	};
+
+	pinctrl2 {
+		bootph-all;
+		%(pinctrl2)s
+	};
+};
+'''
+
+    def run_pins(self, pins='1 2 &pull_up 3 4 &drive', strength='12',
+                 extra='&i2c_extra', spl_pins='&other_pins', pinctrl2=''):
+        """Run dtoc on a devicetree with pin settings
+
+        Args:
+            pins (str): Value of the test,pins property for the I2C bus
+            strength (str): Value of the drive-strength property
+            extra (str): Second node to use for the pins of the I2C bus
+            spl_pins (str): Node to use for the pins of the spl-test device
+            pinctrl2 (str): Contents of the second pin controller
+
+        Returns:
+            str: Contents of dt-plat.c
+        """
+        dts_fname = tools.get_output_filename('pins.dts')
+        tools.write_file(dts_fname, self.PINS_DTS % {
+            'pins': pins, 'strength': strength, 'extra': extra,
+            'spl_pins': spl_pins, 'pinctrl2': pinctrl2},
+                         binary=False)
+        dtb_file = fdt_util.EnsureCompiled(dts_fname, capture_stderr=True)
+        output = tools.get_output_filename('output')
+        scan = copy_scan()
+        scan._parse_driver('test_pinctrl.c', self.PINCTRL_DRIVER)
+        scan._drivers['test_pinctrl'].uclass = scan._uclass['UCLASS_PINCTRL']
+        dtb_platdata.run_steps(['platdata'], dtb_file, False, output, [],
+                               None, False, warning_disabled=True, scan=scan,
+                               props_only=True, driver_ref=True)
+        return tools.read_file(output, binary=False)
+
+    def test_pins(self):
+        """Test generating the pin settings for each device"""
+        data = self.run_pins()
+
+        # Each config is in the table once, in the order it is first used. A
+        # property which is not a pin config is ignored
+        self.assertIn('''#if IS_ENABLED(DM_HAS_DRIVER_test_pinctrl)
+/*
+ * Pin configs for /pinctrl: a count, then a parameter and argument for each
+ */
+static const u16 __maybe_unused dtv_pinconf_pinctrl[] = {
+\t/* 0: pcfg-pull-up */
+\t1, PIN_CONFIG_BIAS_PULL_UP, 1,
+\t/* 3: pcfg-drive */
+\t2, PIN_CONFIG_BIAS_DISABLE, 0, PIN_CONFIG_DRIVE_STRENGTH, 12,
+};
+''', data)
+
+        # The pins come from each node in pinctrl-0, with the phandle replaced
+        # by the position of the config
+        self.assertIn('''/* Node /i2c index 0 */
+#if IS_ENABLED(DM_HAS_DRIVER_sandbox_i2c)
+static const u16 dtv_pins_i2c[] = {
+\t1, 2, 0,
+\t3, 4, 3,
+\t5, 6, 0,
+};
+
+U_BOOT_PINS(i2c) = {
+\t.dev_idx\t= 0,
+\t.pctl_idx\t= 2,
+\t.count\t\t= 3,
+\t.pins\t\t= dtv_pins_i2c,
+\t.conf\t\t= dtv_pinconf_pinctrl,
+};
+#endif
+''', data)
+
+        # The controller need not be the immediate parent
+        self.assertIn('''static const u16 dtv_pins_serial[] = {
+\t7, 8, 3,
+};
+''', data)
+
+        # A node with no driver has no pin settings, nor does one whose pins
+        # are not below a controller which gives the format
+        self.assertEqual(2, data.count('U_BOOT_PINS('))
+
+        # Each controller has its own table of configs
+        data = self.run_pins(spl_pins='&spl_pins', pinctrl2='''
+		compatible = "test,pinctrl";
+		pull_down: pcfg-pull-down {
+			bias-pull-down;
+		};
+		spl_pins: pins {
+			test,pins = <10 11 &pull_down>;
+		};
+''')
+        self.assertIn('''static const u16 __maybe_unused dtv_pinconf_pinctrl2[] = {
+\t/* 0: pcfg-pull-down */
+\t1, PIN_CONFIG_BIAS_PULL_DOWN, 1,
+};
+''', data)
+        self.assertIn('''U_BOOT_PINS(spl_test) = {
+\t.dev_idx\t= 5,
+\t.pctl_idx\t= 3,
+\t.count\t\t= 1,
+\t.pins\t\t= dtv_pins_spl_test,
+\t.conf\t\t= dtv_pinconf_pinctrl2,
+};
+''', data)
+
+    def test_pins_none(self):
+        """Test that there is no output if no driver gives the format"""
+        dtb_file = get_dtb_file('dtoc_test_simple.dts')
+        output = tools.get_output_filename('output')
+        dtb_platdata.run_steps(['platdata'], dtb_file, False, output, [],
+                               None, False, warning_disabled=True,
+                               scan=copy_scan())
+        data = tools.read_file(output, binary=False)
+        self.assertNotIn('pinctrl', data)
+
+    def test_pins_bad(self):
+        """Test pin settings which are not in the expected format"""
+        with self.assertRaises(ValueError) as exc:
+            self.run_pins(pins='1 2 &pull_up 3 4')
+        self.assertIn("Node '/pinctrl/i2c-pins': property 'test,pins' has 5 "
+                      'cells, not a multiple of 3', str(exc.exception))
+
+        with self.assertRaises(ValueError) as exc:
+            self.run_pins(pins='1 2 0x999')
+        self.assertIn("Node '/pinctrl/i2c-pins': property 'test,pins' has no "
+                      'phandle in cell 2', str(exc.exception))
+
+        with self.assertRaises(ValueError) as exc:
+            self.run_pins(pins='1 0x10000 &pull_up')
+        self.assertIn("Node '/pinctrl/i2c-pins': a value in 'test,pins' is "
+                      'too large for a pin table', str(exc.exception))
+
+        with self.assertRaises(ValueError) as exc:
+            self.run_pins(strength='0x10000')
+        self.assertIn("Node '/pinctrl/pcfg-drive': value 0x10000 of "
+                      "'drive-strength' is too large for a pin table",
+                      str(exc.exception))
+
+        # Use a node in a second controller for the I2C bus
+        with self.assertRaises(ValueError) as exc:
+            self.run_pins(extra='&i2c_pins2', pinctrl2='''
+		compatible = "test,pinctrl";
+		pull2: pcfg-pull-up {
+			bias-pull-up;
+		};
+		i2c_pins2: pins {
+			test,pins = <1 2 &pull2>;
+		};
+''')
+        self.assertIn("Node '/i2c' has pins in two controllers: '/pinctrl' "
+                      "and '/pinctrl2'", str(exc.exception))
+
     def test_chosen(self):
         """Test generating the boot order from the /chosen node"""
         dtb_file = get_dtb_file('dtoc_test_chosen.dts')

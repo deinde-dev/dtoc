@@ -55,6 +55,31 @@ node does not have, or which have fixed values.
 With ``OF_PLATDATA_INST``, dtoc goes further and writes out the devices and
 uclasses themselves, so that U-Boot does not need to bind them at run time.
 
+Pin settings
+~~~~~~~~~~~~
+
+A device's ``pinctrl-0`` property refers to nodes below a pin controller which
+hold its pin settings, in a format which depends on the controller. A pinctrl
+driver can give the format by putting ``DM_PINS()`` in its ``U_BOOT_DRIVER()``
+declaration::
+
+    DM_PINS("rockchip,pins", 4, 3)
+
+This names the property which holds the pins, the number of cells for each pin
+and which cell is a phandle to a node holding the generic pin-configuration
+properties, such as ``bias-pull-up``, or -1 if there is none.
+
+For each node which uses such a controller, dtoc then adds to ``dt-plat.c`` a
+table of its pins and a ``U_BOOT_PINS()`` record which gives the index of the
+device, the index of the controller and the number of pins. The table holds
+the cells for each pin, with the phandle replaced by the position of the pin's
+config in a table for the controller. Each config there is a count, followed
+by that many pairs of a ``PIN_CONFIG_...`` parameter and its argument, which
+is the property's value, or the default for that property if it has none.
+
+The tables are built only if the phase has the driver for the controller and
+for the device. Only the default state, ``pinctrl-0``, is supported.
+
 How U-Boot uses the generated code is described in its documentation, under
 :doc:`uboot:develop/driver-model/of-plat`.
 
