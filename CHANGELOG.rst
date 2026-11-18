@@ -8,6 +8,12 @@ the project follows `Semantic Versioning <https://semver.org/>`_.
 Unreleased
 ----------
 
+Added
+~~~~~
+- Pin settings for each device, in ``dt-plat.c``, where the driver for its
+  pin controller gives the format with ``DM_PINS()``, so that U-Boot can
+  set up pins without a devicetree.
+
 0.8.0 - 2026-11-17
 ------------------
 

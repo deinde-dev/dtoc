@@ -138,6 +138,13 @@ class Driver:
                     str: Kind of helper, e.g. 'u32_default' or 'clk'
                     str: Devicetree property name, e.g. 'spi-max-frequency',
                         or None for 'driver_data'
+        pins (tuple): Format of the pin settings for a pin controller, from
+            DM_PINS() in the driver declaration, or None if it has none:
+                str: Name of the property which holds the pins, e.g.
+                    'rockchip,pins'
+                int: Number of cells for each pin
+                int: Index of the cell which is a phandle to a node holding
+                    pin-configuration properties, or -1 if there is none
     """
     def __init__(self, name, fname):
         self.name = name
@@ -155,6 +162,7 @@ class Driver:
         self.warn_dups = False
         self.uclass = None
         self.dev_props = {}
+        self.pins = None
 
     def __eq__(self, other):
         return (self.name == other.name and
@@ -570,6 +578,8 @@ class Scanner:
 
         re_phase = re.compile(r'^\s*DM_PHASE\((.*)\).*$')
         re_hdr = re.compile(r'^\s*DM_HEADER\((.*)\).*$')
+        re_pins = re.compile(
+            r'^\s*DM_PINS\(\s*"([^"]+)"\s*,\s*(\d+)\s*,\s*(-?\d+)\s*\)')
         re_alias = re.compile(r'DM_DRIVER_ALIAS\(\s*(\w+)\s*,\s*(\w+)\s*\)')
 
         # Matches the struct name for priv, plat
@@ -600,6 +610,7 @@ class Scanner:
                 m_cpriv = re_child_priv.match(line)
                 m_phase = re_phase.match(line)
                 m_hdr = re_hdr.match(line)
+                m_pins = re_pins.match(line)
                 if m_priv:
                     driver.priv = m_priv.group(1)
                 elif m_plat:
@@ -621,6 +632,9 @@ class Scanner:
                     driver.phase = m_phase.group(1)
                 elif m_hdr:
                     driver.headers.append(m_hdr.group(1))
+                elif m_pins:
+                    driver.pins = (m_pins.group(1), int(m_pins.group(2)),
+                                   int(m_pins.group(3)))
                 elif '};' in line:
                     is_root = driver.name == 'root_driver'
                     if driver.uclass_id and (compat or is_root):

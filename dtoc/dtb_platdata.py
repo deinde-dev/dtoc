@@ -56,6 +56,42 @@ VAL_PREFIX = 'dtv_'
 # Largest alias number which fits in the 'seq' member of U-Boot's driver_info
 MAX_ALIAS_SEQ = 127
 
+# Generic pin-configuration properties, from the devicetree binding. Each has
+# the PIN_CONFIG_... parameter and the argument to use if the property has no
+# value
+PINCONF_PARAMS = {
+    'bias-bus-hold': ('BIAS_BUS_HOLD', 0),
+    'bias-disable': ('BIAS_DISABLE', 0),
+    'bias-high-impedance': ('BIAS_HIGH_IMPEDANCE', 0),
+    'bias-pull-down': ('BIAS_PULL_DOWN', 1),
+    'bias-pull-pin-default': ('BIAS_PULL_PIN_DEFAULT', 1),
+    'bias-pull-up': ('BIAS_PULL_UP', 1),
+    'drive-open-drain': ('DRIVE_OPEN_DRAIN', 0),
+    'drive-open-source': ('DRIVE_OPEN_SOURCE', 0),
+    'drive-push-pull': ('DRIVE_PUSH_PULL', 0),
+    'drive-strength': ('DRIVE_STRENGTH', 0),
+    'drive-strength-microamp': ('DRIVE_STRENGTH_UA', 0),
+    'input-debounce': ('INPUT_DEBOUNCE', 0),
+    'input-disable': ('INPUT_ENABLE', 0),
+    'input-enable': ('INPUT_ENABLE', 1),
+    'input-schmitt': ('INPUT_SCHMITT', 0),
+    'input-schmitt-disable': ('INPUT_SCHMITT_ENABLE', 0),
+    'input-schmitt-enable': ('INPUT_SCHMITT_ENABLE', 1),
+    'low-power-disable': ('LOW_POWER_MODE', 0),
+    'low-power-enable': ('LOW_POWER_MODE', 1),
+    'output-disable': ('OUTPUT_ENABLE', 0),
+    'output-enable': ('OUTPUT_ENABLE', 1),
+    'output-high': ('OUTPUT', 1),
+    'output-low': ('OUTPUT', 0),
+    'power-source': ('POWER_SOURCE', 0),
+    'skew-delay': ('SKEW_DELAY', 0),
+    'sleep-hardware-state': ('SLEEP_HARDWARE_STATE', 0),
+    'slew-rate': ('SLEW_RATE', 0),
+}
+
+# Largest value which fits in a cell of the pin tables
+MAX_PIN_VALUE = 0xffff
+
 # Properties which are considered to be phandles
 #    key: property name
 #    value: name of associated #cells property in the target node
@@ -712,6 +748,203 @@ class DtbPlatdata():
                         node.phandles.add(target_node)
                         pos += 1 + args
 
+
+    @staticmethod
+    def get_cells(prop):
+        """Get the cells of a property as a list of integers
+
+        Args:
+            prop (fdt.Prop): Property to read
+
+        Returns:
+            list of int: Value of each cell
+        """
+        values = prop.value if isinstance(prop.value, list) else [prop.value]
+        return [fdt_util.fdt32_to_cpu(val) for val in values]
+
+    def find_pin_controller(self, group):
+        """Find the pin controller for a node which holds pin settings
+
+        Args:
+            group (fdt.Node): Node holding pin settings
+
+        Returns:
+            fdt.Node: Nearest parent of @group whose driver gives the format
+                of its pin settings with DM_PINS(), or None if there is none
+        """
+        node = group.parent
+        while node:
+            if (node in self._valid_nodes and node.driver and
+                    node.driver.pins):
+                return node
+            node = node.parent
+        return None
+
+    @staticmethod
+    def get_pin_conf(pctl, phandle_node):
+        """Get the position of a pin config in the table for its controller
+
+        The table holds each config as a count followed by that many
+        parameters, each with its argument. A config is added to the table
+        the first time it is needed
+
+        Args:
+            pctl (fdt.Node): Pin controller
+            phandle_node (fdt.Node): Node holding the generic
+                pin-configuration properties
+
+        Returns:
+            int: Position of the config in pctl.pin_conf
+        """
+        pos = pctl.pin_conf_pos.get(phandle_node.path)
+        if pos is not None:
+            return pos
+        params = []
+        for prop in phandle_node.props.values():
+            info = PINCONF_PARAMS.get(prop.name)
+            if not info:
+                continue
+            param, arg = info
+            if isinstance(prop.value, bytes):
+                arg = fdt_util.fdt32_to_cpu(prop.value)
+            if arg > MAX_PIN_VALUE:
+                raise ValueError(
+                    "Node '%s': value %#x of '%s' is too large for a pin table" %
+                    (phandle_node.path, arg, prop.name))
+            params.append((param, arg))
+        pos = sum(1 + 2 * len(conf) for _, conf in pctl.pin_conf)
+        pctl.pin_conf_pos[phandle_node.path] = pos
+        pctl.pin_conf.append((phandle_node, params))
+        return pos
+
+    def scan_pins(self):
+        """Work out the pin settings for each node which has them
+
+        The pinctrl-0 property of a node lists the nodes which hold its
+        default pin settings. Each is below a pin controller, whose driver
+        gives the format of the settings with DM_PINS(): the property which
+        holds them, the number of cells for each pin and which cell, if any,
+        is a phandle to a node with generic pin-configuration properties.
+
+        This sets up, for each node:
+            pin_ctrl: its pin controller, or None if it has no pin settings in
+                a format which a driver has given
+            pins: list of pins, each a list of cells, with the phandle
+                replaced by the position of the config in the controller's
+                table
+        and for each pin controller:
+            pin_conf: list of configs in its table, each a tuple:
+                fdt.Node: Node holding the properties
+                list of tuple: parameter name and argument for each
+            pin_conf_pos: dict of the position of each config in the table,
+                keyed by node path
+
+        Raises:
+            ValueError: The pin settings are not in the expected format
+        """
+        for node in self._valid_nodes:
+            node.pin_ctrl = None
+            node.pins = []
+            node.pin_conf = []
+            node.pin_conf_pos = {}
+        for node in self._valid_nodes:
+            prop = node.props.get('pinctrl-0')
+            if not prop:
+                continue
+            for phandle in self.get_cells(prop):
+                group = self._fdt.phandle_to_node.get(phandle)
+                pctl = group and self.find_pin_controller(group)
+                if not pctl:
+                    continue
+                if node.pin_ctrl and node.pin_ctrl != pctl:
+                    raise ValueError(
+                        "Node '%s' has pins in two controllers: '%s' and '%s'" %
+                        (node.path, node.pin_ctrl.path, pctl.path))
+                node.pin_ctrl = pctl
+                prop_name, num_cells, conf_cell = pctl.driver.pins
+                pins_prop = group.props.get(prop_name)
+                if not pins_prop:
+                    continue
+                cells = self.get_cells(pins_prop)
+                if len(cells) % num_cells:
+                    raise ValueError(
+                        "Node '%s': property '%s' has %d cells, not a multiple of %d" %
+                        (group.path, prop_name, len(cells), num_cells))
+                for pos in range(0, len(cells), num_cells):
+                    pin = cells[pos:pos + num_cells]
+                    if conf_cell >= 0:
+                        conf_node = self._fdt.phandle_to_node.get(
+                            pin[conf_cell])
+                        if not conf_node:
+                            raise ValueError(
+                                "Node '%s': property '%s' has no phandle in cell %d" %
+                                (group.path, prop_name, conf_cell))
+                        pin[conf_cell] = self.get_pin_conf(pctl, conf_node)
+                    if max(pin) > MAX_PIN_VALUE:
+                        raise ValueError(
+                            "Node '%s': a value in '%s' is too large for a pin table" %
+                            (group.path, prop_name))
+                    node.pins.append(pin)
+
+    def output_pins(self):
+        """Output the pin settings for each device which has them
+
+        This writes a table of configs for each pin controller and, for each
+        device with pins, a table of the pins and a U_BOOT_PINS() record which
+        U-Boot uses to find them. Each is left out of the build if the phase
+        does not have the driver for the controller or for the device, since
+        the settings are then of no use.
+        """
+        nodes = [node for node in self._valid_nodes
+                 if node.pins and node.driver]
+        if not nodes:
+            return
+        self.buf('''/*
+ * Pin settings for each device which has them, in the format given by
+ * DM_PINS() in the driver for the pin controller
+ */
+#include <dm/pinctrl.h>
+
+''')
+        pctls = []
+        for node in nodes:
+            if node.pin_ctrl not in pctls:
+                pctls.append(node.pin_ctrl)
+        for pctl in pctls:
+            self.buf('#if IS_ENABLED(DM_HAS_DRIVER_%s)\n' % pctl.driver.name)
+            self.buf('/*\n * Pin configs for %s: a count, then a parameter and '
+                     'argument for each\n */\n' % pctl.path)
+            self.buf('static const u16 __maybe_unused %spinconf_%s[] = {\n' %
+                     (VAL_PREFIX, pctl.var_name))
+            for conf_node, params in pctl.pin_conf:
+                self.buf('\t/* %d: %s */\n' %
+                         (pctl.pin_conf_pos[conf_node.path], conf_node.name))
+                self.buf('\t%d,%s\n' % (len(params), ''.join(
+                    ' PIN_CONFIG_%s, %d,' % (param, arg)
+                    for param, arg in params)))
+            self.buf('};\n\n')
+            for node in nodes:
+                if node.pin_ctrl != pctl:
+                    continue
+                self.buf('/* Node %s index %d */\n' % (node.path, node.idx))
+                self.buf('#if IS_ENABLED(DM_HAS_DRIVER_%s)\n' %
+                         node.driver.name)
+                self.buf('static const u16 %spins_%s[] = {\n' %
+                         (VAL_PREFIX, node.var_name))
+                for pin in node.pins:
+                    self.buf('\t%s,\n' % ', '.join('%d' % val for val in pin))
+                self.buf('};\n\n')
+                self.buf('U_BOOT_PINS(%s) = {\n' % node.var_name)
+                self.buf('\t.dev_idx\t= %d,\n' % node.idx)
+                self.buf('\t.pctl_idx\t= %d,\n' % pctl.idx)
+                self.buf('\t.count\t\t= %d,\n' % len(node.pins))
+                self.buf('\t.pins\t\t= %spins_%s,\n' %
+                         (VAL_PREFIX, node.var_name))
+                self.buf('\t.conf\t\t= %spinconf_%s,\n' %
+                         (VAL_PREFIX, pctl.var_name))
+                self.buf('};\n')
+                self.buf('#endif\n\n')
+            self.buf('#endif\n\n')
 
     def generate_structs(self):
         """Generate struct defintions for the platform data
@@ -1617,6 +1850,7 @@ class DtbPlatdata():
 
             for node in self._valid_nodes:
                 self.output_node_plat(node)
+            self.output_pins()
 
         self.out(''.join(self.get_buf()))
 
@@ -1762,6 +1996,7 @@ def run_steps(args, dtb_file, include_disabled, output, output_dirs, phase,
     plat.read_aliases()
     plat.read_alias_seqs()
     plat.assign_seqs()
+    plat.scan_pins()
 
     # Figure out what output files we plan to generate
     output_files = dict(OUTPUT_FILES_COMMON)
