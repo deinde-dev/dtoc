@@ -13,6 +13,10 @@ Added
 - An ``--alias-seq`` option, which gives the alias number of each node in
   its device record, so that U-Boot can number devices from ``/aliases``
   as it does with a devicetree.
+- A ``chosen`` command, which writes ``dt-chosen.h``. This holds the
+  entries of the ``u-boot,spl-boot-order`` property in ``/chosen``, with
+  the index of each node's device record, so that SPL can follow the boot
+  order without a devicetree.
 
 0.7.0 - 2026-11-16
 ------------------

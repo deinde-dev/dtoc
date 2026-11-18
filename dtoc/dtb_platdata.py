@@ -762,6 +762,45 @@ class DtbPlatdata():
             self.output_dtplat_get(driver)
             self.out('\n')
 
+    def generate_chosen(self):
+        """Generate the values which U-Boot needs from the /chosen node
+
+        This writes out a DT_CHOSEN_SPL_BOOT_ORDER macro, which holds an
+        initialiser for each entry in the u-boot,spl-boot-order property. Each
+        has the path of a node and the index of its driver_info record, or -1
+        if the node is not in the devicetree or has no record. The entry for
+        'same-as-spl' has a NULL path. The macro is empty if there is no such
+        property.
+
+        An entry may be an alias instead of a path, as U-Boot allows with a
+        devicetree, in which case the path comes from /aliases
+        """
+        entries = []
+        chosen = self._fdt.GetNode('/chosen')
+        prop = chosen and chosen.props.get('u-boot,spl-boot-order')
+        if prop:
+            aliases = self._fdt.GetNode('/aliases')
+            values = prop.value if isinstance(prop.value, list) else [prop.value]
+            for value in values:
+                if value == 'same-as-spl':
+                    entries.append('{ NULL, -1 }')
+                    continue
+                if aliases and value in aliases.props:
+                    value = aliases.props[value].value
+                node = self._fdt.GetNode(value)
+                idx = node.idx if node in self._valid_nodes else -1
+                entries.append('{ "%s", %d }' % (value, idx))
+        self.out('''/*
+ * Entries in u-boot,spl-boot-order, each with the path of a node and the index
+ * of its driver_info record, or -1 if it has none. A NULL path means
+ * 'same-as-spl'
+ */
+''')
+        self.out('#define DT_CHOSEN_SPL_BOOT_ORDER')
+        for entry in entries:
+            self.out(' \\\n\t%s,' % entry)
+        self.out('\n')
+
     def output_dtplat_get(self, driver):
         """Output the accessor for a driver's generated data
 
@@ -1618,6 +1657,9 @@ class DtbPlatdata():
 # key: Command used to generate this file
 # value: OutputFile for this command
 OUTPUT_FILES_COMMON = {
+    'chosen':
+        OutputFile(Ftype.HEADER, 'dt-chosen.h', DtbPlatdata.generate_chosen,
+                   'Holds the values which U-Boot needs from the /chosen node'),
     'decl':
         OutputFile(Ftype.HEADER, 'dt-decl.h', DtbPlatdata.generate_decl,
                    'Declares externs for all device/uclass instances'),

@@ -78,6 +78,15 @@ comma-separated list of the following:
     ``dt-structs-gen.h``: the structs which hold the devicetree data for each
     driver
 
+``chosen``
+    ``dt-chosen.h``: the values which U-Boot needs from the ``/chosen`` node.
+    For now this is a ``DT_CHOSEN_SPL_BOOT_ORDER`` macro, which holds an
+    initialiser for each entry in the ``u-boot,spl-boot-order`` property,
+    giving the path of the node and the index of its ``driver_info`` record,
+    or -1 if it has none. The entry for ``same-as-spl`` has a NULL path. An
+    alias is replaced by its path. The macro is empty if there is no such
+    property
+
 ``decl``
     ``dt-decl.h``: declarations for all the device and uclass instances
 

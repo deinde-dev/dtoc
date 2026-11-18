@@ -1,0 +1,22 @@
+// SPDX-License-Identifier: GPL-2.0+
+/*
+ * Test device tree file for dtoc
+ *
+ * Copyright 2026 Simon Glass <sjg@chromium.org>
+ */
+
+/dts-v1/;
+
+/ {
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	chosen {
+		u-boot,spl-boot-order = &i2c;
+	};
+
+	i2c: i2c {
+		bootph-all;
+		compatible = "sandbox,i2c";
+	};
+};
